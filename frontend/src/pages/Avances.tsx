@@ -122,23 +122,27 @@ const AvanceModal: React.FC<{
           <h2 className="text-lg font-semibold text-gray-900">{avance ? 'Editar Avance' : 'Nuevo Avance'}</h2>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X className="h-5 w-5" /></button>
         </div>
-        <form onSubmit={submit} className="p-6 space-y-4">
+        <form onSubmit={submit} className="p-6 space-y-3">
           {error   && <div className="flex items-center gap-2 bg-red-50 text-red-700 border border-red-200 px-3 py-2 rounded-md text-sm"><AlertCircle className="h-4 w-4 flex-shrink-0" />{error}</div>}
           {success && <div className="flex items-center gap-2 bg-green-50 text-green-700 border border-green-200 px-3 py-2 rounded-md text-sm"><CheckCircle className="h-4 w-4 flex-shrink-0" />{success}</div>}
 
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Número de Avance *</label>
-              <input type="number" name="numavance" min="1" value={form.numavance} onChange={change} className="input" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Fecha *</label>
-              <input type="date" name="fecha_presentacion" value={form.fecha_presentacion} onChange={change} className="input" />
+          {/* Sección 1 — azul pizarra */}
+          <div className="bg-slate-50 border border-slate-200 rounded-lg p-3">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1">Número de Avance *</label>
+                <input type="number" name="numavance" min="1" value={form.numavance} onChange={change} className="input" />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1">Fecha *</label>
+                <input type="date" name="fecha_presentacion" value={form.fecha_presentacion} onChange={change} className="input" />
+              </div>
             </div>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Contratista que reporta *</label>
+          {/* Sección 2 — azul cielo */}
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+            <label className="block text-xs font-semibold text-blue-700 uppercase tracking-wide mb-1">Contratista que reporta *</label>
             <select name="contratistaId" value={form.contratistaId}
               onChange={e => { change(e); setForm(p => ({ ...p, alcanceId: '' })); }}
               className="input">
@@ -147,16 +151,18 @@ const AvanceModal: React.FC<{
             </select>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Meta asociada *</label>
+          {/* Sección 3 — índigo */}
+          <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-3">
+            <label className="block text-xs font-semibold text-indigo-700 uppercase tracking-wide mb-1">Meta asociada *</label>
             <select name="metaId" value={form.metaId} onChange={change} className="input">
               <option value="">-- Seleccionar meta --</option>
               {metas.map(m => <option key={m.id} value={m.id}>{m.codigo ? `[${m.codigo}] ` : ''}{m.nombre}</option>)}
             </select>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Alcance del contrato</label>
+          {/* Sección 4 — verde azulado */}
+          <div className="bg-teal-50 border border-teal-200 rounded-lg p-3">
+            <label className="block text-xs font-semibold text-teal-700 uppercase tracking-wide mb-1">Alcance del contrato</label>
             <select name="alcanceId" value={form.alcanceId} onChange={change} className="input"
               disabled={!form.contratistaId}>
               <option value="">-- Seleccionar alcance --</option>
@@ -167,29 +173,31 @@ const AvanceModal: React.FC<{
             )}
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Porcentaje de avance: <span className="text-primary-600 font-bold">{form.porcentaje_avance}%</span>
+          {/* Sección 5 — ámbar */}
+          <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+            <label className="block text-xs font-semibold text-amber-700 uppercase tracking-wide mb-2">
+              Porcentaje de avance: <span className="text-lg font-bold">{form.porcentaje_avance}%</span>
             </label>
             <input
               type="range" name="porcentaje_avance" min="0" max="100" step="5"
               value={form.porcentaje_avance} onChange={change}
-              className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-primary-600"
+              className="w-full h-2 bg-amber-200 rounded-lg appearance-none cursor-pointer accent-amber-600"
             />
-            <div className="flex justify-between text-xs text-gray-400 mt-1">
+            <div className="flex justify-between text-xs text-amber-500 mt-1">
               <span>0%</span><span>25%</span><span>50%</span><span>75%</span><span>100%</span>
             </div>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Descripción *</label>
+          {/* Sección 6 — violeta */}
+          <div className="bg-violet-50 border border-violet-200 rounded-lg p-3">
+            <label className="block text-xs font-semibold text-violet-700 uppercase tracking-wide mb-1">Descripción *</label>
             <textarea name="descripcion" value={form.descripcion} onChange={change}
               rows={3} className="input resize-none" placeholder="Descripción detallada del avance realizado..." />
           </div>
 
-          {/* ─── Sección de Evidencia ─── */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Evidencia / Archivo adjunto</label>
+          {/* Sección 7 — verde */}
+          <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3">
+            <label className="block text-xs font-semibold text-emerald-700 uppercase tracking-wide mb-2">Evidencia / Archivo adjunto</label>
 
             {/* Archivo ya subido */}
             {uploadedUrl && (
@@ -411,9 +419,19 @@ const Avances: React.FC = () => {
           <div className="text-center py-12 text-gray-500">No se encontraron avances</div>
         ) : (
           <div className="space-y-4">
-            {filtered.map(avance => (
-              <div key={avance.id} className="border border-gray-200 rounded-lg p-5 hover:shadow-sm transition-shadow bg-white">
-                <div className="flex justify-between items-start mb-3">
+            {filtered.map((avance, idx) => {
+              const cardStyles = [
+                { card: 'bg-sky-50 border-sky-300',     header: 'bg-sky-100 border border-sky-300 text-sky-800' },
+                { card: 'bg-lime-50 border-lime-300',   header: 'bg-lime-100 border border-lime-300 text-lime-800' },
+                { card: 'bg-rose-50 border-rose-300',   header: 'bg-rose-100 border border-rose-300 text-rose-800' },
+                { card: 'bg-purple-50 border-purple-300', header: 'bg-purple-100 border border-purple-300 text-purple-800' },
+              ];
+              const style = cardStyles[idx % 4];
+              return (
+              <div key={avance.id} className={`rounded-xl p-4 hover:shadow-lg transition-shadow border-2 ${style.card}`}>
+
+                {/* ── Cabecera ── */}
+                <div className={`flex justify-between items-start mb-3 rounded-lg px-3 py-2 ${style.header}`}>
                   <div className="flex-1 min-w-0 mr-4">
                     <h3 className="text-base font-semibold text-gray-900">
                       Avance #{avance.numavance}
@@ -437,17 +455,17 @@ const Avances: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Barra de progreso */}
-                <div className="mb-4 bg-gray-50 rounded-lg px-4 py-3">
+                {/* ── Barra de progreso — ámbar ── */}
+                <div className="mb-3 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
                   <div className="flex items-center justify-between mb-1">
-                    <span className="text-xs font-medium text-gray-600">Porcentaje de avance reportado</span>
+                    <span className="text-xs font-semibold text-amber-700 uppercase tracking-wide">Porcentaje de avance reportado</span>
                     <span className={`text-sm font-bold ${
                       avance.porcentaje_avance >= 100 ? 'text-green-600' :
                       avance.porcentaje_avance >= 60  ? 'text-blue-600'  :
                       avance.porcentaje_avance >= 30  ? 'text-yellow-600': 'text-red-500'
                     }`}>{avance.porcentaje_avance ?? 0}%</span>
                   </div>
-                  <div className="w-full bg-gray-200 rounded-full h-2.5">
+                  <div className="w-full bg-amber-100 rounded-full h-2.5">
                     <div
                       className={`h-2.5 rounded-full transition-all ${
                         (avance.porcentaje_avance ?? 0) >= 100 ? 'bg-green-500' :
@@ -459,43 +477,49 @@ const Avances: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-3">
-                  <div className="text-sm">
-                    <span className="font-medium text-gray-500 text-xs uppercase tracking-wide">Contratista</span>
+                {/* ── Info: Contratista / Meta / Nº reporte ── */}
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-2 mb-3">
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg px-3 py-2 text-sm">
+                    <span className="font-semibold text-blue-700 text-xs uppercase tracking-wide">Contratista</span>
                     <div className="flex items-center gap-1.5 mt-0.5">
                       {avance.contratista?.codigo && <span className="font-mono font-bold text-green-700 bg-green-50 px-1.5 py-0.5 rounded text-xs border border-green-200">{avance.contratista.codigo}</span>}
-                      <p className="text-gray-800 font-medium">{avance.contratista?.nombre || '-'}</p>
+                      <p className="text-gray-800 font-medium truncate">{avance.contratista?.nombre || '-'}</p>
                     </div>
                   </div>
-                  <div className="text-sm">
-                    <span className="font-medium text-gray-500 text-xs uppercase tracking-wide">Meta</span>
+                  <div className="bg-indigo-50 border border-indigo-200 rounded-lg px-3 py-2 text-sm">
+                    <span className="font-semibold text-indigo-700 text-xs uppercase tracking-wide">Meta</span>
                     <div className="flex items-center gap-1.5 mt-0.5">
                       {avance.meta?.codigo && <span className="font-mono font-bold text-primary-600 bg-primary-50 px-1.5 py-0.5 rounded text-xs border border-primary-200">{avance.meta.codigo}</span>}
-                      <p className="text-gray-800 font-medium">{avance.meta?.nombre || '-'}</p>
+                      <p className="text-gray-800 font-medium truncate">{avance.meta?.nombre || '-'}</p>
                     </div>
                   </div>
-                  <div className="text-sm">
-                    <span className="font-medium text-gray-500 text-xs uppercase tracking-wide">Número de reporte</span>
-                    <p className="text-gray-800 font-medium">#{avance.numavance}</p>
+                  <div className="bg-teal-50 border border-teal-200 rounded-lg px-3 py-2 text-sm">
+                    <span className="font-semibold text-teal-700 text-xs uppercase tracking-wide">Número de reporte</span>
+                    <p className="text-gray-800 font-medium mt-0.5">#{avance.numavance}</p>
                   </div>
                 </div>
-                <div className="bg-gray-50 p-4 rounded-lg">
-                  <div className="flex items-center mb-2">
-                    <FileText className="h-4 w-4 mr-2 text-gray-500" />
-                    <span className="font-medium text-gray-700 text-sm">Descripción</span>
+
+                {/* ── Descripción — violeta ── */}
+                <div className="bg-violet-50 border border-violet-200 p-3 rounded-lg">
+                  <div className="flex items-center mb-1.5">
+                    <FileText className="h-4 w-4 mr-2 text-violet-500" />
+                    <span className="font-semibold text-violet-700 text-xs uppercase tracking-wide">Descripción</span>
                   </div>
-                  <p className="text-gray-600 text-sm">{avance.descripcion}</p>
+                  <p className="text-gray-700 text-sm">{avance.descripcion}</p>
                 </div>
+
+                {/* ── Evidencia — esmeralda ── */}
                 {avance.reg_imagen && (
-                  <div className="mt-3">
+                  <div className="mt-2 bg-emerald-50 border border-emerald-200 rounded-lg p-3">
+                    <span className="font-semibold text-emerald-700 text-xs uppercase tracking-wide block mb-2">Evidencia adjunta</span>
                     {/\.(jpg|jpeg|png|gif|webp)$/i.test(avance.reg_imagen) ? (
                       <a href={avance.reg_imagen} target="_blank" rel="noreferrer">
-                        <img src={avance.reg_imagen} alt="evidencia" className="w-full max-h-48 object-cover rounded-lg border border-gray-200 hover:opacity-90 transition-opacity" />
-                        <p className="text-xs text-gray-400 mt-1 text-center">Ver imagen completa</p>
+                        <img src={avance.reg_imagen} alt="evidencia" className="w-full max-h-48 object-cover rounded-lg border border-emerald-200 hover:opacity-90 transition-opacity" />
+                        <p className="text-xs text-emerald-500 mt-1 text-center">Ver imagen completa</p>
                       </a>
                     ) : (
                       <a href={avance.reg_imagen} target="_blank" rel="noreferrer"
-                        className="flex items-center gap-2 text-sm text-primary-600 hover:text-primary-800 bg-primary-50 px-3 py-2 rounded-md border border-primary-200">
+                        className="flex items-center gap-2 text-sm text-emerald-700 hover:text-emerald-900 bg-white px-3 py-2 rounded-md border border-emerald-300">
                         <Paperclip className="h-4 w-4 flex-shrink-0" />
                         <span className="truncate">{avance.reg_imagen.split('/').pop()}</span>
                       </a>
@@ -503,7 +527,8 @@ const Avances: React.FC = () => {
                   </div>
                 )}
               </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

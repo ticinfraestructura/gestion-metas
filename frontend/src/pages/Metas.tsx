@@ -322,17 +322,19 @@ const Metas: React.FC = () => {
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Acciones</th>
                 </tr>
               </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
+              <tbody className="divide-y divide-gray-200">
                 {filtered.length === 0 ? (
                   <tr><td colSpan={7} className="px-6 py-12 text-center text-gray-500">No se encontraron metas</td></tr>
                 ) : (
-                  filtered.map(meta => {
+                  filtered.map((meta, idx) => {
+                    const rowColors = ['bg-sky-50','bg-lime-50','bg-rose-50','bg-purple-50'];
+                    const rowColor  = rowColors[idx % 4];
                     const contrib = alcances.filter(a => a.metaId === meta.id);
                     const expanded = expandedMetaId === meta.id;
                     const totalPct = contrib.reduce((s, a) => s + a.porcentaje_asignado, 0);
                     return (
                       <React.Fragment key={meta.id}>
-                        <tr className={`hover:bg-gray-50 ${expanded ? 'bg-primary-50/30' : ''}`}>
+                        <tr className={`hover:brightness-95 transition-colors ${expanded ? 'ring-2 ring-inset ring-primary-200' : ''} ${rowColor}`}>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <span className="inline-flex items-center px-2.5 py-1 rounded-md bg-primary-50 text-primary-700 text-xs font-mono font-bold border border-primary-200">
                               {meta.codigo || '—'}

@@ -376,15 +376,17 @@ const Usuarios: React.FC = () => {
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Acciones</th>
                 </tr>
               </thead>
-              <tbody className="bg-white divide-y divide-gray-100">
+              <tbody className="divide-y divide-gray-200">
                 {filtered.length === 0 ? (
                   <tr><td colSpan={6} className="px-4 py-12 text-center text-gray-500">No se encontraron usuarios</td></tr>
                 ) : (
-                  filtered.map(u => {
+                  filtered.map((u, idx) => {
+                    const rowColors = ['bg-sky-50','bg-lime-50','bg-rose-50','bg-purple-50'];
+                    const rowColor  = rowColors[idx % 4];
                     const isSelf    = u.id === currentUser?.id;
                     const isAdminRoot = u.id === 1;
                     return (
-                      <tr key={u.id} className={`hover:bg-gray-50 ${isSelf ? 'bg-primary-50/40' : ''}`}>
+                      <tr key={u.id} className={`hover:brightness-95 transition-colors ${isSelf ? 'ring-2 ring-inset ring-primary-300' : ''} ${rowColor}`}>
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-3">
                             <div className={`h-9 w-9 rounded-full flex items-center justify-center flex-shrink-0 ${

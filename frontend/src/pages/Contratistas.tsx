@@ -385,11 +385,18 @@ const Contratistas: React.FC = () => {
           <div className="text-center py-12 text-gray-500">No se encontraron contratistas</div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {filtered.map(c => {
+            {filtered.map((c, idx) => {
+              const cardColors = [
+                'border-2 border-sky-300 bg-sky-50',
+                'border-2 border-lime-300 bg-lime-50',
+                'border-2 border-rose-300 bg-rose-50',
+                'border-2 border-purple-300 bg-purple-50',
+              ];
+              const cardColor  = cardColors[idx % 4];
               const myAlcances = alcances.filter(a => a.contratistaId === c.id);
               const expanded   = expandedId === c.id;
               return (
-                <div key={c.id} className="card border border-gray-200 hover:shadow-md transition-shadow">
+                <div key={c.id} className={`card hover:shadow-lg transition-shadow ${cardColor}`}>
                   {/* ─ Cabecera ─ */}
                   <div className="p-5">
                     <div className="flex items-center mb-3">
