@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Diagnóstico - Login</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #f0f2f5;
+            padding: 20px;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        .section {
+            background: white;
+            margin: 20px 0;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+        }
+        .success { background: #d4edda; color: #155724; }
+        .error { background: #f8d7da; color: #721c24; }
+        .info { background: #d1ecf1; color: #0c5460; }
+        .test-btn {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        .test-btn:hover { background: #0056b3; }
+        pre {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 Diagnóstico del Sistema</h1>
+        
+        <div class="section">
+            <h2>Estado del Navegador</h2>
+            <div id="browser-info"></div>
+        </div>
+        
+        <div class="section">
+            <h2>Conexión con Backend</h2>
+            <div id="backend-status"></div>
+            <button class="test-btn" onclick="testBackend()">Probar Backend</button>
+        </div>
+        
+        <div class="section">
+            <h2>Almacenamiento Local</h2>
+            <div id="storage-info"></div>
+            <button class="test-btn" onclick="clearStorage()">Limpiar Storage</button>
+        </div>
+        
+        <div class="section">
+            <h2>Prueba de Login</h2>
+            <input type="email" id="test-email" placeholder="admin@gestionmetas.com" style="width: 300px; padding: 8px; margin: 5px;">
+            <input type="password" id="test-password" placeholder="admin123" style="width: 200px; padding: 8px; margin: 5px;">
+            <button class="test-btn" onclick="testLogin()">Probar Login</button>
+            <div id="login-result"></div>
+        </div>
+        
+        <div class="section">
+            <h2>Consola de Errores</h2>
+            <div id="console-log"></div>
+            <button class="test-btn" onclick="clearConsole()">Limpiar Consola</button>
+        </div>
+    </div>
+
+    <script>
+        // Capturar errores de JavaScript
+        const originalError = console.error;
+        const originalLog = console.log;
+        const errors = [];
+        
+        console.error = function(...args) {
+            errors.push({
+                type: 'error',
+                message: args.join(' '),
+                timestamp: new Date().toISOString()
+            });
+            originalError.apply(console, args);
+            updateConsoleLog();
+        };
+        
+        console.log = function(...args) {
+            errors.push({
+                type: 'log',
+                message: args.join(' '),
+                timestamp: new Date().toISOString()
+            });
+            originalLog.apply(console, args);
+            updateConsoleLog();
+        };
+        
+        function updateBrowserInfo() {
+            const info = `
+                <div class="status info">
+                    <strong>Navegador:</strong> ${navigator.userAgent}<br>
+                    <strong>URL Actual:</strong> ${window.location.href}<br>
+                    <strong>Fecha/Hora:</strong> ${new Date().toLocaleString()}<br>
+                    <strong>Idioma:</strong> ${navigator.language}<br>
+                    <strong>Plataforma:</strong> ${navigator.platform}<br>
+                    <strong>Online:</strong> ${navigator.onLine ? 'Sí' : 'No'}
+                </div>
+            `;
+            document.getElementById('browser-info').innerHTML = info;
+        }
+        
+        async function testBackend() {
+            const statusDiv = document.getElementById('backend-status');
+            statusDiv.innerHTML = '<div class="status info">Probando conexión...</div>';
+            
+            try {
+                const response = await fetch('http://localhost:3001/health');
+                const data = await response.json();
+                
+                statusDiv.innerHTML = `
+                    <div class="status success">
+                        ✅ Backend conectado<br>
+                        <strong>Estado:</strong> ${data.status}<br>
+                        <strong>Timestamp:</strong> ${data.timestamp}<br>
+                        <strong>Response Time:</strong> ${Date.now() - performance.now()}ms
+                    </div>
+                `;
+            } catch (error) {
+                statusDiv.innerHTML = `
+                    <div class="status error">
+                        ❌ Error de conexión<br>
+                        <strong>Error:</strong> ${error.message}<br>
+                        <strong>URL:</strong> http://localhost:3001/health
+                    </div>
+                `;
+            }
+        }
+        
+        function updateStorageInfo() {
+            const usuario = localStorage.getItem('usuario');
+            const token = localStorage.getItem('token');
+            const loginTime = localStorage.getItem('loginTime');
+            
+            const info = `
+                <div class="status ${usuario ? 'success' : 'info'}">
+                    <strong>Usuario en Storage:</strong> ${usuario ? 'Sí' : 'No'}<br>
+                    <strong>Token en Storage:</strong> ${token ? 'Sí' : 'No'}<br>
+                    <strong>Fecha de Login:</strong> ${loginTime || 'No registrada'}<br>
+                    <strong>Storage Disponible:</strong> ${typeof(Storage) !== 'undefined' ? 'Sí' : 'No'}<br>
+                    <strong>Storage Usado:</strong> ${JSON.stringify(localStorage).length} caracteres
+                </div>
+            `;
+            document.getElementById('storage-info').innerHTML = info;
+        }
+        
+        function testLogin() {
+            const email = document.getElementById('test-email').value;
+            const password = document.getElementById('test-password').value;
+            const resultDiv = document.getElementById('login-result');
+            
+            if (!email || !password) {
+                resultDiv.innerHTML = '<div class="status error">Por favor completa email y password</div>';
+                return;
+            }
+            
+            const usuarios = [
+                { email: 'admin@gestionmetas.com', password: 'admin123', nombre: 'Administrador' },
+                { email: 'usuario@gestionmetas.com', password: 'user123', nombre: 'Usuario' }
+            ];
+            
+            const usuario = usuarios.find(u => u.email === email && u.password === password);
+            
+            if (usuario) {
+                localStorage.setItem('usuario', JSON.stringify(usuario));
+                localStorage.setItem('token', 'test-token-' + Date.now());
+                resultDiv.innerHTML = `
+                    <div class="status success">
+                        ✅ Login exitoso<br>
+                        <strong>Usuario:</strong> ${usuario.nombre}<br>
+                        <strong>Email:</strong> ${usuario.email}<br>
+                        <strong>Rol:</strong> ${usuario.rol || 'No definido'}
+                    </div>
+                `;
+                updateStorageInfo();
+            } else {
+                resultDiv.innerHTML = `
+                    <div class="status error">
+                        ❌ Credenciales inválidas<br>
+                        <strong>Email:</strong> ${email}<br>
+                        <strong>Password:</strong> ${password ? '***' : 'vacío'}
+                    </div>
+                `;
+            }
+        }
+        
+        function clearStorage() {
+            localStorage.clear();
+            updateStorageInfo();
+            document.getElementById('login-result').innerHTML = '<div class="status info">Storage limpiado</div>';
+        }
+        
+        function updateConsoleLog() {
+            const logDiv = document.getElementById('console-log');
+            if (errors.length === 0) {
+                logDiv.innerHTML = '<div class="status info">Sin errores registrados</div>';
+                return;
+            }
+            
+            const lastErrors = errors.slice(-5).reverse();
+            const html = lastErrors.map(error => 
+                `<div class="status ${error.type === 'error' ? 'error' : 'info'}">
+                    <strong>[${error.timestamp}]</strong> ${error.type.toUpperCase()}: ${error.message}
+                </div>`
+            ).join('');
+            
+            logDiv.innerHTML = html;
+        }
+        
+        function clearConsole() {
+            errors.length = 0;
+            updateConsoleLog();
+        }
+        
+        // Inicializar diagnóstico
+        window.addEventListener('load', () => {
+            updateBrowserInfo();
+            updateStorageInfo();
+            testBackend();
+            updateConsoleLog();
+            
+            // Auto-probar login cada 5 segundos
+            setInterval(() => {
+                const email = document.getElementById('test-email').value;
+                const password = document.getElementById('test-password').value;
+                if (email && password) {
+                    testLogin();
+                }
+            }, 5000);
+        });
+    </script>
+</body>
+</html>

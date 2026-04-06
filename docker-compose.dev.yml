@@ -1,0 +1,71 @@
+version: '3.8'
+
+services:
+  # MySQL Database
+  mysql:
+    image: mysql:8.0
+    container_name: gestion-metas-mysql-dev
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: gestion_metas_dev
+      MYSQL_USER: gestion_user
+      MYSQL_PASSWORD: gestion_password
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_dev_data:/var/lib/mysql
+    networks:
+      - gestion-metas-dev-network
+
+  # Backend API (Development)
+  backend:
+    build:
+      context: ./backend
+      dockerfile: ../docker/Dockerfile.backend
+    container_name: gestion-metas-backend-dev
+    restart: unless-stopped
+    environment:
+      NODE_ENV: development
+      PORT: 3000
+      DATABASE_URL: mysql://gestion_user:gestion_password@mysql:3306/gestion_metas_dev
+      JWT_SECRET: dev-jwt-secret-key
+      CORS_ORIGIN: http://localhost:3001
+      CORS_CREDENTIALS: "true"
+      RATE_LIMIT_WINDOW_MS: 900000
+      RATE_LIMIT_MAX_REQUESTS: 1000
+    ports:
+      - "3000:3000"
+    depends_on:
+      - mysql
+    networks:
+      - gestion-metas-dev-network
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+    command: npm run dev
+
+  # Frontend (Development)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: ../docker/Dockerfile.frontend
+    container_name: gestion-metas-frontend-dev
+    restart: unless-stopped
+    environment:
+      REACT_APP_API_URL: http://localhost:3000/api
+      REACT_APP_ENV: development
+    ports:
+      - "3001:80"
+    depends_on:
+      - backend
+    networks:
+      - gestion-metas-dev-network
+
+volumes:
+  mysql_dev_data:
+    driver: local
+
+networks:
+  gestion-metas-dev-network:
+    driver: bridge

@@ -1,0 +1,116 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+// Enums (simplified for SQLite)
+model Usuario {
+  id                        Int            @id @default(autoincrement())
+  nombre                    String
+  password                  String
+  email                     String          @unique
+  rol                       String          @default("USUARIO")
+  estado                    String          @default("PENDIENTE_VALIDACION")
+  email_validado             Boolean         @default(false)
+  token_validacion_email     String?         @unique
+  fecha_token_validacion     DateTime?
+  ultimo_login               DateTime?
+  intentos_fallidos         Int             @default(0)
+  fecha_bloqueo             DateTime?
+  fecha_creacion            DateTime        @default(now()) 
+  fecha_actualizacion       DateTime        @updatedAt
+
+  // Relaciones
+  metas_creadas             Meta[]          @relation("UsuarioMetas")
+  avances                   Avance[]        @relation("UsuarioAvances")
+  sesiones                  SesionUsuario[]
+  logs_autenticacion        LogAutenticacion[]
+
+  // Índices
+  @@index([email])
+  @@index([estado])
+  @@map("usuarios")
+}
+
+model SesionUsuario {
+  id             Int      @id @default(autoincrement())
+  usuario_id     Int
+  token_refresh  String   @unique
+  ip_address     String
+  user_agent     String?
+  fecha_inicio   DateTime @default(now())
+  fecha_expiracion DateTime
+  fecha_cierre    DateTime?
+  
+  usuario        Usuario   @relation(fields: [usuario_id], references: [id], onDelete: Cascade)
+  
+  @@map("sesiones_usuario")
+}
+
+model LogAutenticacion {
+  id         Int      @id @default(autoincrement())
+  usuario_id  Int?
+  email      String
+  ip_address String
+  user_agent String?
+  resultado  String    @default("FALLIDO")
+  motivo     String?
+  fecha      DateTime  @default(now())
+  
+  usuario Usuario? @relation(fields: [usuario_id], references: [id])
+  
+  @@map("logs_autenticacion")
+}
+
+model Meta {
+  id             Int       @id @default(autoincrement())
+  nombre         String
+  descripcion    String?
+  estado         String    @default("PENDIENTE")
+  fecha_creacion DateTime  @default(now())
+  fecha_limite   DateTime?
+  creador_id     Int
+  
+  creador Usuario   @relation("UsuarioMetas", fields: [creador_id], references: [id])
+  avances Avance[]
+  
+  @@map("metas")
+}
+
+model Contratista {
+  id             Int    @id @default(autoincrement())
+  nombre         String
+  identificacion  String  @unique
+  contacto       String
+  estado         String  @default("activo")
+  fecha_creacion DateTime @default(now())
+  fecha_actualizacion DateTime @updatedAt
+  
+  avances Avance[]
+  
+  @@map("contratistas")
+}
+
+model Avance {
+  id               Int      @id @default(autoincrement())
+  descripcion      String
+  fecha_presentacion DateTime @default(now())
+  numavance        Int      @default(1)
+  reg_imagen       String?
+  meta_id          Int
+  contratista_id   Int
+  reportado_por_id Int
+  
+  meta         Meta       @relation(fields: [meta_id], references: [id], onDelete: Cascade)
+  contratista  Contratista @relation(fields: [contratista_id], references: [id])
+  reportadoPor Usuario    @relation("UsuarioAvances", fields: [reportado_por_id], references: [id])
+  
+  @@map("avances")
+}

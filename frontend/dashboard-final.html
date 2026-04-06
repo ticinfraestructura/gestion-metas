@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Dashboard - Sistema de Gestión</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: Arial, sans-serif;
+            background: #f5f5f5;
+        }
+        
+        .header {
+            background: #667eea;
+            color: white;
+            padding: 15px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .header h1 {
+            font-size: 24px;
+        }
+        
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        
+        .btn {
+            background: #dc3545;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        
+        .btn:hover {
+            background: #c82333;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 30px 20px;
+        }
+        
+        .welcome {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 30px;
+        }
+        
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .stat-card {
+            background: white;
+            padding: 25px;
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+        
+        .stat-number {
+            font-size: 36px;
+            font-weight: bold;
+            color: #667eea;
+            margin-bottom: 10px;
+        }
+        
+        .stat-label {
+            color: #666;
+            font-size: 14px;
+        }
+        
+        .content {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+        
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 15px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🎯 Sistema de Gestión de Metas</h1>
+        <div class="user-info">
+            <span id="userName">Usuario</span>
+            <button class="btn" onclick="cerrarSesion()">Cerrar Sesión</button>
+        </div>
+    </div>
+    
+    <div class="container">
+        <div class="welcome">
+            <h2>¡Bienvenido al Dashboard!</h2>
+            <p id="welcomeText">Cargando información...</p>
+        </div>
+        
+        <div class="stats">
+            <div class="stat-card">
+                <div class="stat-number" id="totalMetas">3</div>
+                <div class="stat-label">Total de Metas</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="metasActivas">3</div>
+                <div class="stat-label">Metas Activas</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="totalContratistas">3</div>
+                <div class="stat-label">Contratistas</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="totalAvances">2</div>
+                <div class="stat-label">Avances</div>
+            </div>
+        </div>
+        
+        <div class="content">
+            <h2>📊 Estado del Sistema</h2>
+            <div id="systemStatus">
+                <div class="loading">
+                    <div class="spinner"></div>
+                    <p>Verificando conexión con el backend...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Prevenir loops y redirecciones infinitas
+        let isLoading = false;
+        
+        function verificarSesion() {
+            const sesion = localStorage.getItem('usuario_sesion');
+            if (!sesion) {
+                window.location.replace('login-final.html');
+                return null;
+            }
+            
+            try {
+                return JSON.parse(sesion);
+            } catch (error) {
+                localStorage.removeItem('usuario_sesion');
+                window.location.replace('login-final.html');
+                return null;
+            }
+        }
+        
+        function cerrarSesion() {
+            if (confirm('¿Estás seguro de que deseas cerrar sesión?')) {
+                localStorage.removeItem('usuario_sesion');
+                localStorage.removeItem('login_timestamp');
+                window.location.replace('login-final.html');
+            }
+        }
+        
+        async function verificarBackend() {
+            if (isLoading) return;
+            isLoading = true;
+            
+            try {
+                const response = await fetch('http://localhost:3001/health');
+                const data = await response.json();
+                
+                document.getElementById('systemStatus').innerHTML = `
+                    <div style="padding: 20px; background: #d4edda; border-radius: 8px; color: #155724;">
+                        ✅ Backend conectado<br>
+                        <strong>Estado:</strong> ${data.status}<br>
+                        <strong>Timestamp:</strong> ${new Date(data.timestamp).toLocaleString()}
+                    </div>
+                `;
+                
+                // Cargar datos adicionales
+                cargarDatosAdicionales();
+                
+            } catch (error) {
+                document.getElementById('systemStatus').innerHTML = `
+                    <div style="padding: 20px; background: #f8d7da; border-radius: 8px; color: #721c24;">
+                        ❌ No se puede conectar con el backend<br>
+                        <strong>Error:</strong> ${error.message}<br>
+                        <strong>Solución:</strong> Verifica que el backend esté corriendo en http://localhost:3001
+                    </div>
+                `;
+            } finally {
+                isLoading = false;
+            }
+        }
+        
+        async function cargarDatosAdicionales() {
+            try {
+                const response = await fetch('http://localhost:3001/api/metas');
+                const data = await response.json();
+                
+                if (data.success) {
+                    document.getElementById('totalMetas').textContent = data.data.length;
+                    document.getElementById('metasActivas').textContent = 
+                        data.data.filter(m => m.estado === 'EN_PROGRESO').length;
+                }
+            } catch (error) {
+                console.log('No se pudieron cargar datos adicionales:', error);
+            }
+        }
+        
+        // Inicializar dashboard
+        window.addEventListener('load', () => {
+            const usuario = verificarSesion();
+            if (!usuario) return;
+            
+            // Mostrar información del usuario
+            document.getElementById('userName').textContent = usuario.nombre;
+            document.getElementById('welcomeText').textContent = 
+                `Hola ${usuario.nombre}, tienes acceso como ${usuario.rol}. ` +
+                `Aquí puedes ver el estado general del sistema.`;
+            
+            // Verificar conexión con backend
+            setTimeout(verificarBackend, 1000);
+        });
+        
+        // Prevenir loops
+        window.addEventListener('beforeunload', () => {
+            isLoading = false;
+        });
+    </script>
+</body>
+</html>

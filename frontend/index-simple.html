@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Gestión de Metas - Funcionando</title>
+    <style>
+        body { font-family: Arial; padding: 20px; }
+        .card { background: #f0f0f0; padding: 15px; border-radius: 5px; margin: 10px 0; }
+        .success { color: #28a745; }
+        .btn { padding: 10px; background: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <h1>🎯 Sistema de Gestión de Metas</h1>
+    
+    <div class="card">
+        <h2 class="success">✅ Backend Funcionando</h2>
+        <p><strong>API:</strong> <a href="http://localhost:3001/api" target="_blank">http://localhost:3001/api</a></p>
+        <p><strong>Health:</strong> <a href="http://localhost:3001/health" target="_blank">http://localhost:3001/health</a></p>
+    </div>
+    
+    <div class="card">
+        <h2>👤 Usuarios de Prueba</h2>
+        <p><strong>Admin:</strong> admin@gestionmetas.com / admin123</p>
+        <p><strong>Usuario:</strong> usuario@gestionmetas.com / user123</p>
+    </div>
+    
+    <div class="card">
+        <h2>🔗 Endpoints API</h2>
+        <p>POST /api/auth/login - Login</p>
+        <p>GET /api/metas - Obtener metas</p>
+        <p>GET /api/contratistas - Obtener contratistas</p>
+        <p>GET /api/avances - Obtener avances</p>
+        <p>GET /api/dashboard/stats - Estadísticas</p>
+        <button class="btn" onclick="probarAPI()">Probar API</button>
+    </div>
+    
+    <div class="card">
+        <h2>📊 Estado del Sistema</h2>
+        <p id="status">Verificando...</p>
+    </div>
+    
+    <script>
+        function probarAPI() {
+            fetch('http://localhost:3001/api/metas')
+                .then(r => r.json())
+                .then(d => alert('Metas: ' + JSON.stringify(d, null, 2)))
+                .catch(e => alert('Error: ' + e.message));
+        }
+        
+        setInterval(() => {
+            fetch('http://localhost:3001/health')
+                .then(r => r.json())
+                .then(d => document.getElementById('status').innerHTML = '✅ ' + d.status)
+                .catch(e => document.getElementById('status').innerHTML = '❌ Error: ' + e.message);
+        }, 3000);
+        
+        probarAPI();
+    </script>
+</body>
+</html>
