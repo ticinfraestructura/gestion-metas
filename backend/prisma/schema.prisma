@@ -1,116 +1,104 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
+// Prisma Schema — MySQL — Gestión de Metas
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "sqlite"
-  url      = "file:./dev.db"
+  provider = "mysql"
+  url      = env("DATABASE_URL")
 }
 
-// Enums (simplified for SQLite)
 model Usuario {
-  id                        Int            @id @default(autoincrement())
-  nombre                    String
-  password                  String
-  email                     String          @unique
-  rol                       String          @default("USUARIO")
-  estado                    String          @default("PENDIENTE_VALIDACION")
-  email_validado             Boolean         @default(false)
-  token_validacion_email     String?         @unique
-  fecha_token_validacion     DateTime?
-  ultimo_login               DateTime?
-  intentos_fallidos         Int             @default(0)
-  fecha_bloqueo             DateTime?
-  fecha_creacion            DateTime        @default(now()) 
-  fecha_actualizacion       DateTime        @updatedAt
-
-  // Relaciones
-  metas_creadas             Meta[]          @relation("UsuarioMetas")
-  avances                   Avance[]        @relation("UsuarioAvances")
-  sesiones                  SesionUsuario[]
-  logs_autenticacion        LogAutenticacion[]
-
-  // Índices
-  @@index([email])
-  @@index([estado])
-  @@map("usuarios")
-}
-
-model SesionUsuario {
   id             Int      @id @default(autoincrement())
-  usuario_id     Int
-  token_refresh  String   @unique
-  ip_address     String
-  user_agent     String?
-  fecha_inicio   DateTime @default(now())
-  fecha_expiracion DateTime
-  fecha_cierre    DateTime?
-  
-  usuario        Usuario   @relation(fields: [usuario_id], references: [id], onDelete: Cascade)
-  
-  @@map("sesiones_usuario")
-}
+  nombre         String   @db.VarChar(200)
+  email          String   @unique @db.VarChar(200)
+  password       String   @db.VarChar(255)
+  rol            String   @default("USUARIO") @db.VarChar(20)
+  estado         String   @default("ACTIVO") @db.VarChar(20)
+  telefono       String?  @db.VarChar(50)
+  fechaCreacion  DateTime @default(now()) @map("fecha_creacion")
 
-model LogAutenticacion {
-  id         Int      @id @default(autoincrement())
-  usuario_id  Int?
-  email      String
-  ip_address String
-  user_agent String?
-  resultado  String    @default("FALLIDO")
-  motivo     String?
-  fecha      DateTime  @default(now())
-  
-  usuario Usuario? @relation(fields: [usuario_id], references: [id])
-  
-  @@map("logs_autenticacion")
+  metas_creadas  Meta[]   @relation("UsuarioMetas")
+  avances        Avance[] @relation("UsuarioAvances")
+
+  @@index([email])
+  @@map("usuarios")
 }
 
 model Meta {
   id             Int       @id @default(autoincrement())
-  nombre         String
-  descripcion    String?
-  estado         String    @default("PENDIENTE")
+  codigo         String?   @unique @db.VarChar(30)
+  nombre         String    @db.VarChar(300)
+  descripcion    String?   @db.Text
+  estado         String    @default("PENDIENTE") @db.VarChar(30)
+  fecha_limite   String?   @db.VarChar(20)
   fecha_creacion DateTime  @default(now())
-  fecha_limite   DateTime?
   creador_id     Int
-  
-  creador Usuario   @relation("UsuarioMetas", fields: [creador_id], references: [id])
-  avances Avance[]
-  
+
+  creador  Usuario   @relation("UsuarioMetas", fields: [creador_id], references: [id])
+  avances  Avance[]
+  alcances Alcance[]
+
+  @@index([estado])
   @@map("metas")
 }
 
 model Contratista {
-  id             Int    @id @default(autoincrement())
-  nombre         String
-  identificacion  String  @unique
-  contacto       String
-  estado         String  @default("activo")
-  fecha_creacion DateTime @default(now())
+  id                  Int      @id @default(autoincrement())
+  codigo              String?  @unique @db.VarChar(30)
+  nombre              String   @db.VarChar(300)
+  identificacion      String   @unique @db.VarChar(50)
+  contacto            String   @db.VarChar(200)
+  telefono            String?  @db.VarChar(50)
+  estado              String   @default("activo") @db.VarChar(20)
+  fecha_creacion      DateTime @default(now())
   fecha_actualizacion DateTime @updatedAt
-  
-  avances Avance[]
-  
+
+  avances  Avance[]
+  alcances Alcance[]
+
   @@map("contratistas")
 }
 
+model Alcance {
+  id                  Int      @id @default(autoincrement())
+  contratistaId       Int
+  metaId              Int
+  descripcion         String   @db.Text
+  fecha_inicio        String   @db.VarChar(20)
+  fecha_fin           String   @db.VarChar(20)
+  periodicidad        String   @default("MENSUAL") @db.VarChar(20)
+  porcentaje_asignado Float    @default(100)
+  fecha_creacion      DateTime @default(now())
+
+  contratista Contratista @relation(fields: [contratistaId], references: [id], onDelete: Cascade)
+  meta        Meta        @relation(fields: [metaId], references: [id], onDelete: Cascade)
+  avances     Avance[]
+
+  @@index([contratistaId])
+  @@index([metaId])
+  @@map("alcances")
+}
+
 model Avance {
-  id               Int      @id @default(autoincrement())
-  descripcion      String
-  fecha_presentacion DateTime @default(now())
-  numavance        Int      @default(1)
-  reg_imagen       String?
-  meta_id          Int
-  contratista_id   Int
-  reportado_por_id Int
-  
-  meta         Meta       @relation(fields: [meta_id], references: [id], onDelete: Cascade)
-  contratista  Contratista @relation(fields: [contratista_id], references: [id])
-  reportadoPor Usuario    @relation("UsuarioAvances", fields: [reportado_por_id], references: [id])
-  
+  id                 Int      @id @default(autoincrement())
+  numavance          Int      @default(1)
+  descripcion        String   @db.Text
+  fecha_presentacion String   @db.VarChar(30)
+  porcentaje_avance  Float    @default(0)
+  reg_imagen         String?  @db.VarChar(500)
+  metaId             Int
+  contratistaId      Int
+  alcanceId          Int?
+  reportado_por_id   Int
+  fecha_creacion     DateTime @default(now())
+
+  meta         Meta        @relation(fields: [metaId], references: [id], onDelete: Cascade)
+  contratista  Contratista @relation(fields: [contratistaId], references: [id])
+  alcance      Alcance?    @relation(fields: [alcanceId], references: [id], onDelete: SetNull)
+  reportadoPor Usuario     @relation("UsuarioAvances", fields: [reportado_por_id], references: [id])
+
+  @@index([metaId])
+  @@index([contratistaId])
   @@map("avances")
 }
