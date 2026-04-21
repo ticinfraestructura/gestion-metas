@@ -32,6 +32,7 @@ model Meta {
   descripcion    String?   @db.Text
   estado         String    @default("PENDIENTE") @db.VarChar(30)
   fecha_limite   String?   @db.VarChar(20)
+  unidades       Float?
   fecha_creacion DateTime  @default(now())
   creador_id     Int
 

@@ -10,6 +10,7 @@ interface Meta {
   descripcion: string;
   estado: string;
   fecha_limite: string;
+  unidades?: number | null;
   porcentaje_completacion?: number;
   creador?: { nombre: string; email: string };
 }
@@ -52,7 +53,7 @@ const estadoColors: Record<string, string> = {
   CANCELADA:   'bg-red-100 text-red-800',
 };
 
-const EMPTY_FORM = { codigo: '', nombre: '', descripcion: '', estado: 'PENDIENTE', fecha_limite: '' };
+const EMPTY_FORM = { codigo: '', nombre: '', descripcion: '', estado: 'PENDIENTE', fecha_limite: '', unidades: '' };
 
 /* ───── Modal ───── */
 interface ModalProps {
@@ -63,7 +64,7 @@ interface ModalProps {
 
 const MetaModal: React.FC<ModalProps> = ({ meta, onClose, onSave }) => {
   const [form, setForm] = useState(meta
-    ? { codigo: meta.codigo || '', nombre: meta.nombre, descripcion: meta.descripcion, estado: meta.estado, fecha_limite: meta.fecha_limite }
+    ? { codigo: meta.codigo || '', nombre: meta.nombre, descripcion: meta.descripcion, estado: meta.estado, fecha_limite: meta.fecha_limite, unidades: meta.unidades != null ? String(meta.unidades) : '' }
     : { ...EMPTY_FORM }
   );
   const [saving, setSaving] = useState(false);
@@ -107,7 +108,7 @@ const MetaModal: React.FC<ModalProps> = ({ meta, onClose, onSave }) => {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50" onClick={onClose}>
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg mx-4" onClick={e => e.stopPropagation()}>
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl mx-4" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
           <h2 className="text-lg font-semibold text-gray-900">
             {meta ? 'Editar Meta' : 'Nueva Meta'}
@@ -138,18 +139,18 @@ const MetaModal: React.FC<ModalProps> = ({ meta, onClose, onSave }) => {
             </div>
             <div className="col-span-2">
               <label className="block text-sm font-medium text-gray-700 mb-1">Nombre *</label>
-              <input name="nombre" value={form.nombre} onChange={handleChange}
-                className="input" placeholder="Nombre de la meta" />
+              <textarea name="nombre" value={form.nombre} onChange={handleChange}
+                rows={2} className="input resize-none" placeholder="Nombre de la meta" />
             </div>
           </div>
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Descripción *</label>
             <textarea name="descripcion" value={form.descripcion} onChange={handleChange}
-              rows={3} className="input resize-none" placeholder="Descripción detallada de la meta" />
+              rows={4} className="input resize-none" placeholder="Descripción detallada de la meta" />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-3 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Estado *</label>
               <select name="estado" value={form.estado} onChange={handleChange} className="input">
@@ -159,6 +160,12 @@ const MetaModal: React.FC<ModalProps> = ({ meta, onClose, onSave }) => {
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Fecha Límite *</label>
               <input type="date" name="fecha_limite" value={form.fecha_limite} onChange={handleChange} className="input" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Unidad(es)</label>
+              <input type="number" name="unidades" value={form.unidades} onChange={handleChange}
+                className="input" placeholder="0.00" min="0" step="0.01" />
+              <p className="text-xs text-gray-400 mt-1">Numérico o % (máx. 2 decimales)</p>
             </div>
           </div>
 
@@ -316,6 +323,7 @@ const Metas: React.FC = () => {
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase" style={{minWidth:'140px'}}>
                     <div className="flex items-center gap-1"><TrendingUp className="h-3 w-3" />Completación</div>
                   </th>
+                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Unidad(es)</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Fecha Límite</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Creador</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Contribuidores</th>
@@ -324,7 +332,7 @@ const Metas: React.FC = () => {
               </thead>
               <tbody className="divide-y divide-gray-200">
                 {filtered.length === 0 ? (
-                  <tr><td colSpan={7} className="px-6 py-12 text-center text-gray-500">No se encontraron metas</td></tr>
+                  <tr><td colSpan={9} className="px-6 py-12 text-center text-gray-500">No se encontraron metas</td></tr>
                 ) : (
                   filtered.map((meta, idx) => {
                     const rowColors = ['bg-sky-50','bg-lime-50','bg-rose-50','bg-purple-50'];
@@ -359,6 +367,12 @@ const Metas: React.FC = () => {
                           <td className="px-6 py-4" style={{minWidth:'140px'}}>
                             <ProgressBar value={meta.porcentaje_completacion ?? 0} />
                           </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-right">
+                            {meta.unidades != null
+                              ? <span className="text-sm font-semibold text-indigo-700 bg-indigo-50 px-2 py-1 rounded border border-indigo-200">{Number(meta.unidades).toFixed(2)}</span>
+                              : <span className="text-gray-300 text-sm">—</span>
+                            }
+                          </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{meta.fecha_limite}</td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{meta.creador?.nombre || '-'}</td>
                           {/* Contribuidores toggle */}
@@ -390,7 +404,7 @@ const Metas: React.FC = () => {
                         {/* ─ Panel de contribuidores expandible ─ */}
                         {expanded && contrib.length > 0 && (
                           <tr>
-                            <td colSpan={8} className="px-0 py-0 bg-primary-50/40 border-b border-primary-100">
+                            <td colSpan={9} className="px-0 py-0 bg-primary-50/40 border-b border-primary-100">
                               <div className="px-8 py-4">
                                 <div className="flex items-center justify-between mb-3">
                                   <p className="text-xs font-semibold text-primary-700 uppercase tracking-wide flex items-center gap-1.5">

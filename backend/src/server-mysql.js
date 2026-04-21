@@ -194,7 +194,7 @@ app.get('/api/metas/:id', async (req, res) => {
 
 app.post('/api/metas', async (req, res) => {
   try {
-    const { nombre, descripcion, estado, fecha_limite, codigo } = req.body;
+    const { nombre, descripcion, estado, fecha_limite, codigo, unidades } = req.body;
     if (!nombre || !descripcion || !estado || !fecha_limite)
       return res.status(400).json({ success: false, message: 'Todos los campos son requeridos' });
     const count     = await prisma.meta.count();
@@ -202,8 +202,9 @@ app.post('/api/metas', async (req, res) => {
     const codigoFinal = codigo?.trim() ? codigo.trim().toUpperCase() : autoCode;
     const dup = await prisma.meta.findUnique({ where: { codigo: codigoFinal } });
     if (dup) return res.status(400).json({ success: false, message: `El código '${codigoFinal}' ya está en uso.` });
+    const unidadesVal = unidades !== undefined && unidades !== '' ? Math.round(parseFloat(unidades) * 100) / 100 : null;
     const meta = await prisma.meta.create({
-      data: { codigo: codigoFinal, nombre, descripcion, estado, fecha_limite, creador_id: 1 },
+      data: { codigo: codigoFinal, nombre, descripcion, estado, fecha_limite, unidades: unidadesVal, creador_id: 1 },
       include: { creador: true },
     });
     res.status(201).json({ success: true, data: await formatMeta(meta), message: 'Meta creada exitosamente' });
@@ -213,7 +214,7 @@ app.post('/api/metas', async (req, res) => {
 app.put('/api/metas/:id', async (req, res) => {
   try {
     const id = parseInt(req.params.id);
-    const { nombre, descripcion, estado, fecha_limite, codigo } = req.body;
+    const { nombre, descripcion, estado, fecha_limite, codigo, unidades } = req.body;
     const current = await prisma.meta.findUnique({ where: { id } });
     if (!current) return res.status(404).json({ success: false, message: 'Meta no encontrada' });
     const codigoFinal = codigo?.trim() ? codigo.trim().toUpperCase() : current.codigo;
@@ -221,8 +222,9 @@ app.put('/api/metas/:id', async (req, res) => {
       const dup = await prisma.meta.findFirst({ where: { codigo: codigoFinal, NOT: { id } } });
       if (dup) return res.status(400).json({ success: false, message: `El código '${codigoFinal}' ya está en uso.` });
     }
+    const unidadesVal = unidades !== undefined && unidades !== '' ? Math.round(parseFloat(unidades) * 100) / 100 : null;
     const meta = await prisma.meta.update({
-      where: { id }, data: { codigo: codigoFinal, nombre, descripcion, estado, fecha_limite },
+      where: { id }, data: { codigo: codigoFinal, nombre, descripcion, estado, fecha_limite, unidades: unidadesVal },
       include: { creador: true },
     });
     res.json({ success: true, data: await formatMeta(meta), message: 'Meta actualizada exitosamente' });

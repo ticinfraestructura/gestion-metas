@@ -138,11 +138,11 @@ app.delete('/api/users/:id', (req, res) => {
 
 // Base de datos en memoria para metas
 let metas = [
-  { id: 1, codigo: 'META-001', nombre: 'Construcción de Sede Corporativa', descripcion: 'Construcción completa del edificio principal de la nueva sede corporativa, incluyendo estructura, acabados y urbanismo exterior.', estado: 'EN_PROGRESO', fecha_limite: '2025-12-31', creador: { nombre: 'Administrador', email: 'admin@gestionmetas.com' } },
-  { id: 2, codigo: 'META-002', nombre: 'Sistema Integral de Seguridad', descripcion: 'Instalación de cámaras IP, control de acceso biométrico, sistema de alarmas y centro de monitoreo en todas las instalaciones.', estado: 'EN_PROGRESO', fecha_limite: '2025-09-30', creador: { nombre: 'Administrador', email: 'admin@gestionmetas.com' } },
-  { id: 3, codigo: 'META-003', nombre: 'Renovación y Mantenimiento de Infraestructura', descripcion: 'Renovación completa de fachadas, impermeabilización de techos, pintura general y mantenimiento de áreas comunes.', estado: 'EN_PROGRESO', fecha_limite: '2025-11-30', creador: { nombre: 'Usuario Prueba', email: 'usuario@gestionmetas.com' } },
-  { id: 4, codigo: 'META-004', nombre: 'Modernización de Red Eléctrica', descripcion: 'Sustitución del tablero eléctrico principal, instalación de UPS, planta eléctrica de emergencia y cableado estructurado.', estado: 'PENDIENTE', fecha_limite: '2025-08-31', creador: { nombre: 'Administrador', email: 'admin@gestionmetas.com' } },
-  { id: 5, codigo: 'META-005', nombre: 'Adecuación de Espacios de Trabajo', descripcion: 'Remodelación de oficinas, instalación de divisiones modulares, mobiliario ergonómico y adecuación de salas de reuniones.', estado: 'COMPLETADA', fecha_limite: '2025-06-30', creador: { nombre: 'Usuario Prueba', email: 'usuario@gestionmetas.com' } }
+  { id: 1, codigo: 'META-001', nombre: 'Construcción de Sede Corporativa', descripcion: 'Construcción completa del edificio principal de la nueva sede corporativa, incluyendo estructura, acabados y urbanismo exterior.', estado: 'EN_PROGRESO', fecha_limite: '2025-12-31', unidades: 8500.00, creador: { nombre: 'Administrador', email: 'admin@gestionmetas.com' } },
+  { id: 2, codigo: 'META-002', nombre: 'Sistema Integral de Seguridad', descripcion: 'Instalación de cámaras IP, control de acceso biométrico, sistema de alarmas y centro de monitoreo en todas las instalaciones.', estado: 'EN_PROGRESO', fecha_limite: '2025-09-30', unidades: 120.00, creador: { nombre: 'Administrador', email: 'admin@gestionmetas.com' } },
+  { id: 3, codigo: 'META-003', nombre: 'Renovación y Mantenimiento de Infraestructura', descripcion: 'Renovación completa de fachadas, impermeabilización de techos, pintura general y mantenimiento de áreas comunes.', estado: 'EN_PROGRESO', fecha_limite: '2025-11-30', unidades: 100.00, creador: { nombre: 'Usuario Prueba', email: 'usuario@gestionmetas.com' } },
+  { id: 4, codigo: 'META-004', nombre: 'Modernización de Red Eléctrica', descripcion: 'Sustitución del tablero eléctrico principal, instalación de UPS, planta eléctrica de emergencia y cableado estructurado.', estado: 'PENDIENTE', fecha_limite: '2025-08-31', unidades: 75.50, creador: { nombre: 'Administrador', email: 'admin@gestionmetas.com' } },
+  { id: 5, codigo: 'META-005', nombre: 'Adecuación de Espacios de Trabajo', descripcion: 'Remodelación de oficinas, instalación de divisiones modulares, mobiliario ergonómico y adecuación de salas de reuniones.', estado: 'COMPLETADA', fecha_limite: '2025-06-30', unidades: 200.00, creador: { nombre: 'Usuario Prueba', email: 'usuario@gestionmetas.com' } }
 ];
 let nextMetaId = 6;
 
@@ -192,7 +192,7 @@ app.get('/api/metas/:id', (req, res) => {
 
 // POST crear meta
 app.post('/api/metas', (req, res) => {
-  const { nombre, descripcion, estado, fecha_limite, codigo } = req.body;
+  const { nombre, descripcion, estado, fecha_limite, codigo, unidades } = req.body;
   if (!nombre || !descripcion || !estado || !fecha_limite) {
     return res.status(400).json({ success: false, message: 'Todos los campos son requeridos' });
   }
@@ -201,9 +201,10 @@ app.post('/api/metas', (req, res) => {
   if (metas.some(m => m.codigo === codigoFinal)) {
     return res.status(400).json({ success: false, message: `El código '${codigoFinal}' ya está en uso. Usa un código diferente.` });
   }
+  const unidadesVal = unidades !== undefined && unidades !== '' ? Math.round(parseFloat(unidades) * 100) / 100 : null;
   const nueva = {
     id: nextMetaId++, codigo: codigoFinal,
-    nombre, descripcion, estado, fecha_limite,
+    nombre, descripcion, estado, fecha_limite, unidades: unidadesVal,
     creador: { nombre: 'Administrador', email: 'admin@gestionmetas.com' }
   };
   metas.push(nueva);
@@ -215,13 +216,14 @@ app.put('/api/metas/:id', (req, res) => {
   const id = parseInt(req.params.id);
   const idx = metas.findIndex(m => m.id === id);
   if (idx === -1) return res.status(404).json({ success: false, message: 'Meta no encontrada' });
-  const { nombre, descripcion, estado, fecha_limite, codigo } = req.body;
+  const { nombre, descripcion, estado, fecha_limite, codigo, unidades } = req.body;
   const codigoFinal = codigo && codigo.trim() ? codigo.trim().toUpperCase() : metas[idx].codigo;
   const duplicado = metas.find(m => m.codigo === codigoFinal && m.id !== id);
   if (duplicado) {
     return res.status(400).json({ success: false, message: `El código '${codigoFinal}' ya está en uso por otra meta. Usa un código diferente.` });
   }
-  metas[idx] = { ...metas[idx], nombre, descripcion, estado, fecha_limite, codigo: codigoFinal };
+  const unidadesVal = unidades !== undefined && unidades !== '' ? Math.round(parseFloat(unidades) * 100) / 100 : null;
+  metas[idx] = { ...metas[idx], nombre, descripcion, estado, fecha_limite, codigo: codigoFinal, unidades: unidadesVal };
   res.json({ success: true, data: metas[idx], message: 'Meta actualizada exitosamente' });
 });
 
