@@ -1,21 +1,21 @@
-// Prisma Schema — MySQL — Gestión de Metas
+// Prisma Schema — SQLite — Gestión de Metas
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "mysql"
-  url      = env("DATABASE_URL")
+  provider = "sqlite"
+  url      = "file:./dev.db"
 }
 
 model Usuario {
   id             Int      @id @default(autoincrement())
-  nombre         String   @db.VarChar(200)
-  email          String   @unique @db.VarChar(200)
-  password       String   @db.VarChar(255)
-  rol            String   @default("USUARIO") @db.VarChar(20)
-  estado         String   @default("ACTIVO") @db.VarChar(20)
-  telefono       String?  @db.VarChar(50)
+  nombre         String
+  email          String   @unique
+  password       String
+  rol            String   @default("USUARIO")
+  estado         String   @default("ACTIVO")
+  telefono       String?
   fechaCreacion  DateTime @default(now()) @map("fecha_creacion")
 
   metas_creadas  Meta[]   @relation("UsuarioMetas")
@@ -27,11 +27,11 @@ model Usuario {
 
 model Meta {
   id             Int       @id @default(autoincrement())
-  codigo         String?   @unique @db.VarChar(30)
-  nombre         String    @db.VarChar(300)
-  descripcion    String?   @db.Text
-  estado         String    @default("PENDIENTE") @db.VarChar(30)
-  fecha_limite   String?   @db.VarChar(20)
+  codigo         String?   @unique
+  nombre         String
+  descripcion    String?
+  estado         String    @default("PENDIENTE")
+  fecha_limite   String?
   unidades       Float?
   fecha_creacion DateTime  @default(now())
   creador_id     Int
@@ -46,12 +46,12 @@ model Meta {
 
 model Contratista {
   id                  Int      @id @default(autoincrement())
-  codigo              String?  @unique @db.VarChar(30)
-  nombre              String   @db.VarChar(300)
-  identificacion      String   @unique @db.VarChar(50)
-  contacto            String   @db.VarChar(200)
-  telefono            String?  @db.VarChar(50)
-  estado              String   @default("activo") @db.VarChar(20)
+  codigo              String?  @unique
+  nombre              String
+  identificacion      String   @unique
+  contacto            String
+  telefono            String?
+  estado              String   @default("activo")
   fecha_creacion      DateTime @default(now())
   fecha_actualizacion DateTime @updatedAt
 
@@ -65,10 +65,10 @@ model Alcance {
   id                  Int      @id @default(autoincrement())
   contratistaId       Int
   metaId              Int
-  descripcion         String   @db.Text
-  fecha_inicio        String   @db.VarChar(20)
-  fecha_fin           String   @db.VarChar(20)
-  periodicidad        String   @default("MENSUAL") @db.VarChar(20)
+  descripcion         String
+  fecha_inicio        String
+  fecha_fin           String
+  periodicidad        String   @default("MENSUAL")
   porcentaje_asignado Float    @default(100)
   fecha_creacion      DateTime @default(now())
 
@@ -84,11 +84,11 @@ model Alcance {
 model Avance {
   id                 Int      @id @default(autoincrement())
   numavance          Int      @default(1)
-  descripcion        String   @db.Text
-  fecha_presentacion String   @db.VarChar(30)
+  descripcion        String
+  fecha_presentacion String
   porcentaje_avance  Float    @default(0)
   aporte_meta        Float?
-  reg_imagen         String?  @db.VarChar(500)
+  reg_imagen         String?
   metaId             Int
   contratistaId      Int
   alcanceId          Int?

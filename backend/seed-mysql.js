@@ -74,7 +74,7 @@ async function main() {
     { contratistaId: C('CONT-011').id, metaId: M('META-005').id, descripcion: 'Suministro e instalación de mobiliario ergonómico y divisiones modulares',  fecha_inicio: '2025-01-05', fecha_fin: '2025-05-31', periodicidad: 'MENSUAL', porcentaje_asignado: 65 },
     { contratistaId: C('CONT-007').id, metaId: M('META-005').id, descripcion: 'Remodelación arquitectónica de oficinas y salas de reuniones',              fecha_inicio: '2025-01-05', fecha_fin: '2025-06-15', periodicidad: 'MENSUAL', porcentaje_asignado: 35 },
   ];
-  const alcances = await prisma.alcance.createMany({ data: alcancesData, skipDuplicates: true });
+  const alcances = await prisma.alcance.createMany({ data: alcancesData });
   console.log(`✅ ${alcances.count} alcances creados`);
 
   // ── Avances (muestra representativa) ─────────────────────────────────────
@@ -108,7 +108,7 @@ async function main() {
     { numavance: 2, porcentaje_avance: 100, aporte_meta:  52.00, descripcion: '200 puestos equipados al 100%. 10 salas y 2 auditorios amoblados. Acta definitiva firmada.', fecha_presentacion: '2025-05-30', metaId: M('META-005').id, contratistaId: C('CONT-011').id, alcanceId: AL('CONT-011','META-005'), reportado_por_id: adminId },
   ];
 
-  const avancesResult = await prisma.avance.createMany({ data: avancesData, skipDuplicates: true });
+  const avancesResult = await prisma.avance.createMany({ data: avancesData });
   console.log(`✅ ${avancesResult.count} avances creados`);
 
   console.log('\n🎉 Seed completado exitosamente!');
