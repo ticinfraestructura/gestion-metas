@@ -11,6 +11,7 @@ interface Meta {
   estado: string;
   fecha_limite: string;
   unidades?: number | null;
+  total_aporte_meta?: number;
   porcentaje_completacion?: number;
   creador?: { nombre: string; email: string };
 }
@@ -367,11 +368,27 @@ const Metas: React.FC = () => {
                           <td className="px-6 py-4" style={{minWidth:'140px'}}>
                             <ProgressBar value={meta.porcentaje_completacion ?? 0} />
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-right">
-                            {meta.unidades != null
-                              ? <span className="text-sm font-semibold text-indigo-700 bg-indigo-50 px-2 py-1 rounded border border-indigo-200">{Number(meta.unidades).toFixed(2)}</span>
-                              : <span className="text-gray-300 text-sm">—</span>
-                            }
+                          <td className="px-6 py-4 whitespace-nowrap text-right" style={{minWidth:'150px'}}>
+                            {meta.unidades != null ? (() => {
+                              const aporte = meta.total_aporte_meta ?? 0;
+                              const pct = meta.unidades > 0 ? Math.min(100, (aporte / meta.unidades) * 100) : 0;
+                              const barColor = pct >= 100 ? 'bg-green-500' : pct >= 60 ? 'bg-blue-500' : pct >= 30 ? 'bg-yellow-500' : 'bg-red-400';
+                              return (
+                                <div className="flex flex-col items-end gap-1">
+                                  <span className="text-xs text-gray-500">
+                                    <span className="font-bold text-orange-600">{aporte.toFixed(2)}</span>
+                                    <span className="text-gray-300 mx-1">/</span>
+                                    <span className="font-semibold text-indigo-700">{Number(meta.unidades).toFixed(2)}</span>
+                                  </span>
+                                  <div className="w-28 bg-gray-200 rounded-full h-1.5">
+                                    <div className={`${barColor} h-1.5 rounded-full transition-all`} style={{ width: `${pct}%` }} />
+                                  </div>
+                                  <span className={`text-xs font-bold ${
+                                    pct >= 100 ? 'text-green-600' : pct >= 60 ? 'text-blue-600' : pct >= 30 ? 'text-yellow-600' : 'text-red-500'
+                                  }`}>{pct.toFixed(1)}% avance unidades</span>
+                                </div>
+                              );
+                            })() : <span className="text-gray-300 text-sm">—</span>}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{meta.fecha_limite}</td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{meta.creador?.nombre || '-'}</td>

@@ -6,6 +6,7 @@ interface Avance {
   descripcion: string;
   numavance: number;
   porcentaje_avance: number;
+  aporte_meta?: number | null;
   fecha_presentacion: string;
   metaId?: number | null;
   contratistaId?: number | null;
@@ -19,7 +20,7 @@ interface Catalogo { id: number; codigo?: string; nombre: string; }
 interface Alcance { id: number; contratistaId: number; metaId: number; descripcion: string; periodicidad: string; fecha_inicio: string; fecha_fin: string; meta?: { nombre: string }; }
 
 const API_URL = 'http://localhost:3001/api';
-const EMPTY_FORM = { descripcion: '', numavance: '1', porcentaje_avance: '0', fecha_presentacion: '', metaId: '', contratistaId: '', alcanceId: '' };
+const EMPTY_FORM = { descripcion: '', numavance: '1', porcentaje_avance: '0', aporte_meta: '', fecha_presentacion: '', metaId: '', contratistaId: '', alcanceId: '' };
 
 /* ───── Modal ───── */
 const AvanceModal: React.FC<{
@@ -35,6 +36,7 @@ const AvanceModal: React.FC<{
     avance
       ? { descripcion: avance.descripcion, numavance: String(avance.numavance),
           porcentaje_avance: String(avance.porcentaje_avance ?? 0),
+          aporte_meta: avance.aporte_meta != null ? String(avance.aporte_meta) : '',
           fecha_presentacion: toDateInput(avance.fecha_presentacion),
           metaId: String(avance.metaId || ''), contratistaId: String(avance.contratistaId || ''),
           alcanceId: String(avance.alcanceId || '') }
@@ -188,7 +190,19 @@ const AvanceModal: React.FC<{
             </div>
           </div>
 
-          {/* Sección 6 — violeta */}
+          {/* Sección 6 — naranja: aporte a unidades de la meta */}
+          <div className="bg-orange-50 border border-orange-200 rounded-lg p-3">
+            <label className="block text-xs font-semibold text-orange-700 uppercase tracking-wide mb-1">
+              Aporte a Unidades de Meta
+            </label>
+            <input type="number" name="aporte_meta" value={form.aporte_meta} onChange={change}
+              className="input" placeholder="0.00" min="0" step="0.01" />
+            <p className="text-xs text-orange-500 mt-1">
+              Unidades completadas en este período de reporte (máx. 2 decimales). Si se deja vacío, se estima automáticamente.
+            </p>
+          </div>
+
+          {/* Sección 7 — violeta */}
           <div className="bg-violet-50 border border-violet-200 rounded-lg p-3">
             <label className="block text-xs font-semibold text-violet-700 uppercase tracking-wide mb-1">Descripción *</label>
             <textarea name="descripcion" value={form.descripcion} onChange={change}
@@ -477,8 +491,8 @@ const Avances: React.FC = () => {
                   </div>
                 </div>
 
-                {/* ── Info: Contratista / Meta / Nº reporte ── */}
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-2 mb-3">
+                {/* ── Info: Contratista / Meta / Nº reporte / Aporte ── */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-3">
                   <div className="bg-blue-50 border border-blue-200 rounded-lg px-3 py-2 text-sm">
                     <span className="font-semibold text-blue-700 text-xs uppercase tracking-wide">Contratista</span>
                     <div className="flex items-center gap-1.5 mt-0.5">
@@ -496,6 +510,15 @@ const Avances: React.FC = () => {
                   <div className="bg-teal-50 border border-teal-200 rounded-lg px-3 py-2 text-sm">
                     <span className="font-semibold text-teal-700 text-xs uppercase tracking-wide">Número de reporte</span>
                     <p className="text-gray-800 font-medium mt-0.5">#{avance.numavance}</p>
+                  </div>
+                  <div className="bg-orange-50 border border-orange-200 rounded-lg px-3 py-2 text-sm">
+                    <span className="font-semibold text-orange-700 text-xs uppercase tracking-wide">Aporte a Meta</span>
+                    <p className="text-gray-800 font-bold mt-0.5 text-base">
+                      {avance.aporte_meta != null
+                        ? <span className="text-orange-700">{Number(avance.aporte_meta).toFixed(2)}<span className="text-xs font-normal text-orange-400 ml-1">uds</span></span>
+                        : <span className="text-gray-400 text-sm">auto</span>
+                      }
+                    </p>
                   </div>
                 </div>
 

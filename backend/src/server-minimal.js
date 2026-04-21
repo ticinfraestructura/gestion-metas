@@ -150,8 +150,33 @@ let nextMetaId = 6;
 const calcPorcentajeMeta = (metaId) => {
   const avsMeta = avances.filter(a => a.metaId === metaId);
   if (!avsMeta.length) return 0;
-  // Toma el porcentaje más alto reportado (el avance más reciente)
   return Math.min(100, Math.max(...avsMeta.map(a => a.porcentaje_avance || 0)));
+};
+
+// Helper: calcula aporte_meta de un avance (delta de unidades completadas en ese período)
+// Si el avance tiene aporte_meta explícito lo usa; de lo contrario lo infiere del
+// incremento de porcentaje_avance × unidades_meta × porcentaje_asignado del alcance.
+const computeAporteMeta = (avance) => {
+  if (avance.aporte_meta != null) return avance.aporte_meta;
+  const meta = metas.find(m => m.id === avance.metaId);
+  if (!meta?.unidades) return null;
+  const grp = avances
+    .filter(a => a.metaId === avance.metaId && a.contratistaId === avance.contratistaId)
+    .sort((a, b) => a.numavance - b.numavance);
+  const myIdx = grp.findIndex(a => a.id === avance.id);
+  const prevPct = myIdx > 0 ? (grp[myIdx - 1].porcentaje_avance || 0) : 0;
+  const delta = Math.max(0, (avance.porcentaje_avance || 0) - prevPct);
+  const alcanceObj = alcances.find(a => a.id === avance.alcanceId);
+  const scopePct = alcanceObj ? alcanceObj.porcentaje_asignado / 100 : 1;
+  return Math.round(meta.unidades * delta / 100 * scopePct * 100) / 100;
+};
+
+// Helper: suma total de aporte_meta de todos los avances de una meta
+const calcTotalAporteMeta = (metaId) => {
+  return Math.round(
+    avances.filter(a => a.metaId === metaId)
+           .reduce((sum, a) => sum + (computeAporteMeta(a) || 0), 0) * 100
+  ) / 100;
 };
 
 // Dashboard stats
@@ -177,9 +202,13 @@ app.get('/api/dashboard/stats', (req, res) => {
   });
 });
 
-// GET metas (incluye porcentaje_completacion dinámico)
+// GET metas (incluye porcentaje_completacion y total_aporte_meta dinámicos)
 app.get('/api/metas', (req, res) => {
-  const data = metas.map(m => ({ ...m, porcentaje_completacion: calcPorcentajeMeta(m.id) }));
+  const data = metas.map(m => ({
+    ...m,
+    porcentaje_completacion: calcPorcentajeMeta(m.id),
+    total_aporte_meta: calcTotalAporteMeta(m.id)
+  }));
   res.json({ success: true, data });
 });
 
@@ -187,7 +216,7 @@ app.get('/api/metas', (req, res) => {
 app.get('/api/metas/:id', (req, res) => {
   const meta = metas.find(m => m.id === parseInt(req.params.id));
   if (!meta) return res.status(404).json({ success: false, message: 'Meta no encontrada' });
-  res.json({ success: true, data: { ...meta, porcentaje_completacion: calcPorcentajeMeta(meta.id) } });
+  res.json({ success: true, data: { ...meta, porcentaje_completacion: calcPorcentajeMeta(meta.id), total_aporte_meta: calcTotalAporteMeta(meta.id) } });
 });
 
 // POST crear meta
@@ -458,6 +487,7 @@ let nextAvanceId = 51;
 app.get('/api/avances', (req, res) => {
   const data = avances.map(a => ({
     ...a,
+    aporte_meta: computeAporteMeta(a),
     meta: (() => { const m = metas.find(x => x.id === a.metaId); return m ? { nombre: m.nombre, codigo: m.codigo } : a.meta; })(),
     contratista: (() => { const c = contratistas.find(x => x.id === a.contratistaId); return c ? { nombre: c.nombre, codigo: c.codigo } : a.contratista; })()
   }));
@@ -471,15 +501,16 @@ app.get('/api/avances/:id', (req, res) => {
 });
 
 app.post('/api/avances', (req, res) => {
-  const { descripcion, numavance, fecha_presentacion, metaId, contratistaId, alcanceId, porcentaje_avance, reg_imagen } = req.body;
+  const { descripcion, numavance, fecha_presentacion, metaId, contratistaId, alcanceId, porcentaje_avance, reg_imagen, aporte_meta } = req.body;
   if (!descripcion || !numavance || !fecha_presentacion || !metaId || !contratistaId) {
     return res.status(400).json({ success: false, message: 'Descripción, número, fecha, meta y contratista son requeridos' });
   }
   const meta        = metas.find(m => m.id === parseInt(metaId));
   const contratista = contratistas.find(c => c.id === parseInt(contratistaId));
+  const aporte = aporte_meta !== undefined && aporte_meta !== '' ? Math.round(parseFloat(aporte_meta) * 100) / 100 : null;
   const nuevo = {
     id: nextAvanceId++, numavance: parseInt(numavance), porcentaje_avance: parseInt(porcentaje_avance) || 0,
-    descripcion, fecha_presentacion,
+    descripcion, fecha_presentacion, aporte_meta: aporte,
     metaId: parseInt(metaId), contratistaId: parseInt(contratistaId),
     alcanceId: alcanceId ? parseInt(alcanceId) : null,
     meta: meta ? { nombre: meta.nombre, codigo: meta.codigo } : { nombre: 'Sin meta', codigo: '' },
@@ -488,25 +519,27 @@ app.post('/api/avances', (req, res) => {
     reg_imagen: reg_imagen || ''
   };
   avances.push(nuevo);
-  res.status(201).json({ success: true, data: nuevo, message: 'Avance registrado exitosamente' });
+  res.status(201).json({ success: true, data: { ...nuevo, aporte_meta: computeAporteMeta(nuevo) }, message: 'Avance registrado exitosamente' });
 });
 
 app.put('/api/avances/:id', (req, res) => {
   const idx = avances.findIndex(x => x.id === parseInt(req.params.id));
   if (idx === -1) return res.status(404).json({ success: false, message: 'Avance no encontrado' });
-  const { descripcion, numavance, fecha_presentacion, metaId, contratistaId, alcanceId, porcentaje_avance, reg_imagen } = req.body;
+  const { descripcion, numavance, fecha_presentacion, metaId, contratistaId, alcanceId, porcentaje_avance, reg_imagen, aporte_meta } = req.body;
   const meta        = metas.find(m => m.id === parseInt(metaId));
   const contratista = contratistas.find(c => c.id === parseInt(contratistaId));
+  const aporte = aporte_meta !== undefined && aporte_meta !== '' ? Math.round(parseFloat(aporte_meta) * 100) / 100 : null;
   avances[idx] = {
     ...avances[idx], descripcion, numavance: parseInt(numavance), porcentaje_avance: parseInt(porcentaje_avance) || 0,
-    fecha_presentacion, metaId: parseInt(metaId), contratistaId: parseInt(contratistaId),
+    fecha_presentacion, aporte_meta: aporte,
+    metaId: parseInt(metaId), contratistaId: parseInt(contratistaId),
     alcanceId: alcanceId ? parseInt(alcanceId) : null,
     meta: meta ? { nombre: meta.nombre, codigo: meta.codigo } : avances[idx].meta,
     contratista: contratista ? { nombre: contratista.nombre, codigo: contratista.codigo } : avances[idx].contratista,
     reportadoPor: { nombre: contratista ? contratista.nombre : avances[idx].reportadoPor?.nombre },
     reg_imagen: reg_imagen !== undefined ? reg_imagen : avances[idx].reg_imagen
   };
-  res.json({ success: true, data: avances[idx], message: 'Avance actualizado exitosamente' });
+  res.json({ success: true, data: { ...avances[idx], aporte_meta: computeAporteMeta(avances[idx]) }, message: 'Avance actualizado exitosamente' });
 });
 
 app.delete('/api/avances/:id', (req, res) => {

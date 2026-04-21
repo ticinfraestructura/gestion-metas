@@ -145,11 +145,20 @@ const calcPorcentajeMeta = async (metaId) => {
   return Math.min(100, Math.max(...avances.map(a => a.porcentaje_avance || 0)));
 };
 
+const calcTotalAporteMeta = async (metaId) => {
+  const result = await prisma.avance.aggregate({
+    where: { metaId, aporte_meta: { not: null } },
+    _sum: { aporte_meta: true },
+  });
+  return Math.round((result._sum.aporte_meta || 0) * 100) / 100;
+};
+
 const formatMeta = async (m) => ({
   ...m,
   fecha_limite: m.fecha_limite || '',
   creador: m.creador ? { nombre: m.creador.nombre, email: m.creador.email } : null,
   porcentaje_completacion: await calcPorcentajeMeta(m.id),
+  total_aporte_meta: await calcTotalAporteMeta(m.id),
 });
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -386,19 +395,21 @@ app.get('/api/avances/:id', async (req, res) => {
 
 app.post('/api/avances', async (req, res) => {
   try {
-    const { descripcion, numavance, fecha_presentacion, metaId, contratistaId, alcanceId, porcentaje_avance, reg_imagen } = req.body;
+    const { descripcion, numavance, fecha_presentacion, metaId, contratistaId, alcanceId, porcentaje_avance, reg_imagen, aporte_meta } = req.body;
     if (!descripcion || !numavance || !fecha_presentacion || !metaId || !contratistaId)
       return res.status(400).json({ success: false, message: 'Descripción, número, fecha, meta y contratista son requeridos' });
+    const aporte = aporte_meta !== undefined && aporte_meta !== '' ? Math.round(parseFloat(aporte_meta) * 100) / 100 : null;
     const nuevo = await prisma.avance.create({
       data: {
         numavance: parseInt(numavance),
         descripcion, fecha_presentacion,
         porcentaje_avance: parseFloat(porcentaje_avance) || 0,
+        aporte_meta: aporte,
         reg_imagen: reg_imagen || '',
         metaId: parseInt(metaId),
         contratistaId: parseInt(contratistaId),
         alcanceId: alcanceId ? parseInt(alcanceId) : null,
-        reportado_por_id: parseInt(contratistaId) > 0 ? 1 : 1,
+        reportado_por_id: 1,
       },
       include: includeAvance,
     });
@@ -408,12 +419,14 @@ app.post('/api/avances', async (req, res) => {
 
 app.put('/api/avances/:id', async (req, res) => {
   try {
-    const { descripcion, numavance, fecha_presentacion, metaId, contratistaId, alcanceId, porcentaje_avance, reg_imagen } = req.body;
+    const { descripcion, numavance, fecha_presentacion, metaId, contratistaId, alcanceId, porcentaje_avance, reg_imagen, aporte_meta } = req.body;
+    const aporte = aporte_meta !== undefined && aporte_meta !== '' ? Math.round(parseFloat(aporte_meta) * 100) / 100 : null;
     const updated = await prisma.avance.update({
       where: { id: parseInt(req.params.id) },
       data: {
         numavance: parseInt(numavance), descripcion, fecha_presentacion,
         porcentaje_avance: parseFloat(porcentaje_avance) || 0,
+        aporte_meta: aporte,
         metaId: parseInt(metaId), contratistaId: parseInt(contratistaId),
         alcanceId: alcanceId ? parseInt(alcanceId) : null,
         ...(reg_imagen !== undefined && { reg_imagen }),

@@ -87,6 +87,7 @@ model Avance {
   descripcion        String   @db.Text
   fecha_presentacion String   @db.VarChar(30)
   porcentaje_avance  Float    @default(0)
+  aporte_meta        Float?
   reg_imagen         String?  @db.VarChar(500)
   metaId             Int
   contratistaId      Int
