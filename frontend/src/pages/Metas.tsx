@@ -243,7 +243,7 @@ const Metas: React.FC = () => {
     try {
       const [mRes, aRes] = await Promise.all([fetch(`${API}/metas`), fetch(`${API}/alcances`)]);
       const [mData, aData] = await Promise.all([mRes.json(), aRes.json()]);
-      if (mData.success) { setMetas(mData.data); setFiltered(mData.data); }
+      if (mData.success) { const sorted = [...mData.data].sort((a, b) => new Date(b.fecha_creacion).getTime() - new Date(a.fecha_creacion).getTime()); setMetas(sorted); setFiltered(sorted); }
       else setError('Error al cargar las metas');
       if (aData.success) setAlcances(aData.data);
     } catch { setError('No se puede conectar con el servidor'); }
