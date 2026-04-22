@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Plus, Search, Calendar, FileText, RefreshCw, AlertCircle, X, CheckCircle, Upload, Paperclip, Trash2 } from 'lucide-react';
+import { API_BASE as API_URL } from '../config';
 
 interface Avance {
   id: number;
@@ -19,7 +20,6 @@ interface Avance {
 interface Catalogo { id: number; codigo?: string; nombre: string; }
 interface Alcance { id: number; contratistaId: number; metaId: number; descripcion: string; periodicidad: string; fecha_inicio: string; fecha_fin: string; meta?: { nombre: string }; }
 
-const API_URL = 'http://localhost:3001/api';
 const EMPTY_FORM = { descripcion: '', numavance: '1', porcentaje_avance: '0', aporte_meta: '', fecha_presentacion: '', metaId: '', contratistaId: '', alcanceId: '' };
 
 /* ───── Modal ───── */

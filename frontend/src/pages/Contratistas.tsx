@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Users, Plus, Search, Mail, RefreshCw, AlertCircle, Building2, X, CheckCircle, Phone, ClipboardList, Calendar, Clock, ChevronDown, ChevronUp } from 'lucide-react';
 
-const API = 'http://localhost:3001/api';
+import { API_BASE as API } from '../config';
 
 interface Contratista {
   id: number;
@@ -290,7 +290,7 @@ const Contratistas: React.FC = () => {
         fetch(`${API}/metas`),
       ]);
       const [c, a, m] = await Promise.all([cRes.json(), aRes.json(), mRes.json()]);
-      if (c.success) { setContratistas(c.data); setFiltered(c.data); }
+      if (c.success) { const sorted = [...c.data].sort((a, b) => new Date(b.fecha_creacion).getTime() - new Date(a.fecha_creacion).getTime()); setContratistas(sorted); setFiltered(sorted); }
       else setError('Error al cargar los contratistas');
       if (a.success) setAlcances(a.data);
       if (m.success) setMetas(m.data);

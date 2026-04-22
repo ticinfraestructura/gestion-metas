@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Target, Plus, Search, RefreshCw, AlertCircle, X, CheckCircle, TrendingUp, Users, ChevronDown, ChevronUp } from 'lucide-react';
 
-const API = 'http://localhost:3001/api';
+import { API_BASE as API } from '../config';
 
 interface Meta {
   id: number;

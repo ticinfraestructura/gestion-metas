@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { FileText, Printer, RefreshCw, Search, X, CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react';
 
-const API = 'http://localhost:3001/api';
+import { API_BASE as API } from '../config';
 
 /* ─── Interfaces ─── */
 interface Meta     { id: number; codigo: string; nombre: string; descripcion: string; estado: string; fecha_limite: string; porcentaje_completacion?: number; creador?: { nombre: string }; }

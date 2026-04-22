@@ -1,12 +1,13 @@
 import axios, { AxiosInstance, AxiosRequestConfig } from 'axios';
 import { useAuthStore } from '../store/authStore';
+import { API_BASE } from '../config';
 
 class ApiService {
   private api: AxiosInstance;
 
   constructor() {
     this.api = axios.create({
-      baseURL: process.env.REACT_APP_API_URL || 'http://localhost:3001/api',
+      baseURL: process.env.REACT_APP_API_URL || API_BASE,
       timeout: 10000,
       headers: {
         'Content-Type': 'application/json',

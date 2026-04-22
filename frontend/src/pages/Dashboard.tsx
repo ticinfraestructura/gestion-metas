@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Target, Users, TrendingUp, CheckCircle, RefreshCw, BarChart2, ClipboardList } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
+import { API_BASE } from '../config';
 
 interface Stats {
   totalMetas: number;
@@ -76,9 +77,9 @@ const Dashboard: React.FC = () => {
     setLoading(true);
     try {
       const [statsRes, metasRes, avancesRes] = await Promise.all([
-        fetch('http://localhost:3001/api/dashboard/stats'),
-        fetch('http://localhost:3001/api/metas'),
-        fetch('http://localhost:3001/api/avances'),
+        fetch(`${API_BASE}/dashboard/stats`),
+        fetch(`${API_BASE}/metas`),
+        fetch(`${API_BASE}/avances`),
       ]);
       const [statsData, metasData, avancesData] = await Promise.all([
         statsRes.json(), metasRes.json(), avancesRes.json(),

@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 
-const API = 'http://localhost:3001/api';
+import { API_BASE as API } from '../config';
 
 interface Usuario {
   id: number;
