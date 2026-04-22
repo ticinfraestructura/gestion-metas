@@ -25,6 +25,13 @@ interface AlcanceContrib {
   contratista?: { nombre: string; codigo?: string };
 }
 
+interface AvanceMin {
+  metaId: number;
+  contratistaId: number;
+  porcentaje_avance: number;
+  numavance: number;
+}
+
 const ProgressBar: React.FC<{ value: number }> = ({ value }) => {
   const pct = Math.min(100, Math.max(0, value));
   const color = pct >= 100 ? 'bg-green-500' : pct >= 60 ? 'bg-blue-500' : pct >= 30 ? 'bg-yellow-500' : 'bg-red-400';
@@ -231,6 +238,7 @@ const Metas: React.FC = () => {
   const [metas, setMetas] = useState<Meta[]>([]);
   const [filtered, setFiltered] = useState<Meta[]>([]);
   const [alcances, setAlcances] = useState<AlcanceContrib[]>([]);
+  const [avancesData, setAvancesData] = useState<AvanceMin[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
@@ -241,11 +249,12 @@ const Metas: React.FC = () => {
   const fetchMetas = async () => {
     setLoading(true); setError('');
     try {
-      const [mRes, aRes] = await Promise.all([fetch(`${API}/metas`), fetch(`${API}/alcances`)]);
-      const [mData, aData] = await Promise.all([mRes.json(), aRes.json()]);
+      const [mRes, aRes, avRes] = await Promise.all([fetch(`${API}/metas`), fetch(`${API}/alcances`), fetch(`${API}/avances`)]);
+      const [mData, aData, avData] = await Promise.all([mRes.json(), aRes.json(), avRes.json()]);
       if (mData.success) { const sorted = [...mData.data].sort((a, b) => new Date(b.fecha_creacion).getTime() - new Date(a.fecha_creacion).getTime()); setMetas(sorted); setFiltered(sorted); }
       else setError('Error al cargar las metas');
       if (aData.success) setAlcances(aData.data);
+      if (avData.success) setAvancesData(avData.data);
     } catch { setError('No se puede conectar con el servidor'); }
     finally { setLoading(false); }
   };
@@ -433,7 +442,14 @@ const Metas: React.FC = () => {
                                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
                                   {contrib
                                     .sort((a, b) => b.porcentaje_asignado - a.porcentaje_asignado)
-                                    .map(al => (
+                                    .map(al => {
+                                      const contribAvances = avancesData.filter(av => av.metaId === meta.id && av.contratistaId === al.contratistaId);
+                                      const latestPct = contribAvances.length > 0
+                                        ? Math.max(...contribAvances.map(av => av.porcentaje_avance || 0))
+                                        : null;
+                                      const avColor = latestPct == null ? 'text-gray-400' : latestPct >= 80 ? 'text-green-600' : latestPct >= 50 ? 'text-blue-600' : latestPct >= 20 ? 'text-yellow-600' : 'text-red-500';
+                                      const avBarColor = latestPct == null ? 'bg-gray-300' : latestPct >= 80 ? 'bg-green-500' : latestPct >= 50 ? 'bg-blue-500' : latestPct >= 20 ? 'bg-yellow-500' : 'bg-red-400';
+                                      return (
                                     <div key={al.id} className="bg-white border border-primary-100 rounded-lg px-4 py-3 shadow-sm">
                                       <div className="flex items-center gap-2 mb-2">
                                         {al.contratista?.codigo && (
@@ -445,19 +461,26 @@ const Metas: React.FC = () => {
                                           {al.contratista?.nombre || '—'}
                                         </span>
                                         <span className="ml-auto font-bold text-primary-700 text-sm flex-shrink-0">
-                                          {al.porcentaje_asignado}%
+                                          {al.porcentaje_asignado}% asignado
                                         </span>
                                       </div>
-                                      {/* Barra proporcional respecto al total */}
-                                      <div className="w-full bg-gray-100 rounded-full h-2">
+                                      {/* Avance real reportado */}
+                                      <div className="flex items-center justify-between mb-1">
+                                        <span className="text-xs text-gray-500">Avance reportado</span>
+                                        <span className={`text-xs font-bold ${avColor}`}>
+                                          {latestPct != null ? `${latestPct}%` : 'Sin avances'}
+                                        </span>
+                                      </div>
+                                      <div className="w-full bg-gray-100 rounded-full h-2 mb-2">
                                         <div
-                                          className="h-2 rounded-full bg-gradient-to-r from-primary-400 to-primary-600 transition-all"
-                                          style={{ width: `${totalPct > 0 ? (al.porcentaje_asignado / totalPct) * 100 : 0}%` }}
+                                          className={`h-2 rounded-full transition-all ${avBarColor}`}
+                                          style={{ width: `${latestPct ?? 0}%` }}
                                         />
                                       </div>
-                                      <p className="text-xs text-gray-400 mt-1.5 truncate" title={al.descripcion}>{al.descripcion}</p>
+                                      <p className="text-xs text-gray-400 truncate" title={al.descripcion}>{al.descripcion}</p>
                                     </div>
-                                  ))}
+                                    );
+                                  })}
                                 </div>
                               </div>
                             </td>
