@@ -140,6 +140,15 @@ app.delete('/api/users/:id', async (req, res) => {
 // HELPERS
 // ═════════════════════════════════════════════════════════════════════════════
 const calcPorcentajeMeta = async (metaId) => {
+  const meta = await prisma.meta.findUnique({ where: { id: metaId }, select: { unidades: true } });
+  if (meta?.unidades) {
+    const result = await prisma.avance.aggregate({
+      where: { metaId, aporte_meta: { not: null } },
+      _sum: { aporte_meta: true },
+    });
+    const total = result._sum.aporte_meta || 0;
+    return Math.min(100, Math.round((total / meta.unidades) * 10000) / 100);
+  }
   const avances = await prisma.avance.findMany({ where: { metaId }, select: { porcentaje_avance: true } });
   if (!avances.length) return 0;
   return Math.min(100, Math.max(...avances.map(a => a.porcentaje_avance || 0)));
