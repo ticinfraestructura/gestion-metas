@@ -1,125 +1,136 @@
 # Guía de Despliegue
 
+## Entorno Actual (Windows Local)
+
+El sistema corre directamente en Windows sin Docker:
+
+| Componente | Puerto | Inicio |
+|-----------|--------|--------|
+| MySQL 8.4 | 3306 | Automático (Task Scheduler) |
+| Backend (Node.js + Prisma) | 3001 | Manual: `node src/server-mysql.js` |
+| Frontend (React) | 3000 | Manual: `npm start` |
+
 ## Requisitos Previos
 
-- Docker y Docker Compose
-- Node.js 18+ (para desarrollo local)
-- MySQL 8.0+ (para desarrollo local)
-- Nginx (opcional, para producción)
+- Node.js 18+
+- MySQL 8.4+ instalado y configurado
+- npm 9+
 
 ## Variables de Entorno
 
-Copia el archivo `.env.example` a `.env` y configura las variables:
+Crear `backend/.env`:
 
-```bash
-cp .env.example .env
+```env
+DATABASE_URL="mysql://root:@localhost:3306/gestion_metas"
+PORT=3001
+JWT_SECRET="your-super-secret-jwt-key-change-in-production"
+NODE_ENV="development"
 ```
 
-### Variables Obligatorias
+> ⚠️ Este archivo **no se versiona en git**. Debe crearse manualmente en cada nueva instalación.
 
-- `MYSQL_ROOT_PASSWORD`: Contraseña del root de MySQL
-- `MYSQL_DATABASE`: Nombre de la base de datos
-- `MYSQL_USER`: Usuario de la base de datos
-- `MYSQL_PASSWORD`: Contraseña del usuario de la base de datos
-- `JWT_SECRET`: Secreto para firmar tokens JWT
+## Primera Instalación
 
-### Variables Opcionales
+### 1. Instalar dependencias
 
-- `EMAIL_HOST`: Servidor SMTP para envío de correos
-- `EMAIL_PORT`: Puerto SMTP
-- `EMAIL_USER`: Usuario SMTP
-- `EMAIL_PASS`: Contraseña SMTP
-
-## Despliegue con Docker
-
-### Desarrollo
-
-```bash
-# Iniciar servicios de desarrollo
-docker-compose -f docker-compose.dev.yml up -d
-
-# Ver logs
-docker-compose -f docker-compose.dev.yml logs -f
-
-# Detener servicios
-docker-compose -f docker-compose.dev.yml down
+```powershell
+cd backend  && npm install
+cd frontend && npm install
 ```
 
-### Producción
+### 2. Verificar MySQL
 
-```bash
-# Iniciar servicios de producción
-docker-compose up -d
-
-# Ver logs
-docker-compose logs -f
-
-# Detener servicios
-docker-compose down
+```powershell
+netstat -an | findstr ":3306"
+# Si no aparece, iniciar MySQL manualmente:
+Start-Process -FilePath "C:\Program Files\MySQL\MySQL Server 8.4\bin\mysqld.exe" -ArgumentList "--defaults-file=`"C:\ProgramData\MySQL\MySQL Server 8.4\my.ini`"" -WindowStyle Hidden
+Start-Sleep -Seconds 4
 ```
 
-## Despliegue Manual
+### 3. Crear base de datos
 
-### Backend
+```powershell
+& "C:\Program Files\MySQL\MySQL Server 8.4\bin\mysql.exe" -u root -e "CREATE DATABASE IF NOT EXISTS gestion_metas CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+```
 
-```bash
+### 4. Aplicar migraciones y seed
+
+```powershell
 cd backend
-
-# Instalar dependencias
-npm install
-
-# Generar cliente Prisma
-npx prisma generate
-
-# Ejecutar migraciones
 npx prisma migrate deploy
+node seed-mysql.js
+```
 
-# Iniciar en producción
+### 5. Iniciar servicios
+
+```powershell
+# Terminal 1 — Backend
+cd backend
+node src/server-mysql.js
+
+# Terminal 2 — Frontend
+cd frontend
 npm start
 ```
 
-### Frontend
+## Inicio Diario
 
-```bash
-cd frontend
+MySQL arranca con el equipo (Task Scheduler). Solo ejecutar:
 
-# Instalar dependencias
-npm install
+```powershell
+# Terminal 1
+cd backend && node src/server-mysql.js
 
-# Construir para producción
-npm run build
-
-# Servir archivos estáticos (opcional)
-npx serve -s build -l 3000
+# Terminal 2
+cd frontend && npm start
 ```
 
-## Configuración de Base de Datos
+## Acceso
 
-### Con Docker
+| Recurso | URL local | URL red local |
+|---------|-----------|---------------|
+| Frontend | http://localhost:3000 | http://192.168.1.34:3000 |
+| Backend API | http://localhost:3001/api | http://192.168.1.34:3001/api |
+| Health check | http://localhost:3001/health | — |
 
-La base de datos se crea automáticamente al iniciar los contenedores.
+## Backup de Base de Datos
 
-### Manual
+```powershell
+# Exportar
+& "C:\Program Files\MySQL\MySQL Server 8.4\bin\mysqldump.exe" -u root gestion_metas > backup_$(Get-Date -Format 'yyyyMMdd').sql
 
-1. Crea la base de datos MySQL:
-```sql
-CREATE DATABASE gestion_metas CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+# Restaurar
+& "C:\Program Files\MySQL\MySQL Server 8.4\bin\mysql.exe" -u root gestion_metas < backup.sql
 ```
 
-2. Ejecuta las migraciones:
-```bash
+## Actualización de Código
+
+```powershell
+git pull origin main
+
+# Si hay cambios de esquema de BD:
 cd backend
 npx prisma migrate deploy
 ```
 
-3. (Opcional) Ejecuta el seed:
-```bash
-npx prisma db seed
+## MySQL — Configuración Auto-arranque (Windows)
+
+MySQL está configurado para iniciar automáticamente mediante **Task Scheduler**:
+
+- **Tarea:** `MySQL84-AutoStart`
+- **Disparador:** Al iniciar Windows
+- **Ejecutable:** `C:\Program Files\MySQL\MySQL Server 8.4\bin\mysqld.exe`
+- **Config:** `C:\ProgramData\MySQL\MySQL Server 8.4\my.ini`
+- **Directorio de datos:** `C:\ProgramData\MySQL\MySQL Server 8.4\Data\`
+
+Para verificar o modificar la tarea:
+```powershell
+Get-ScheduledTask -TaskName "MySQL84-AutoStart"
 ```
 
-## Configuración de Nginx
+## Configuración Nginx (Producción)
 
-Para producción, configura Nginx como reverse proxy:
+Si se desea exponer la aplicación vía Nginx:
 
 ```nginx
 server {
@@ -127,11 +138,9 @@ server {
     server_name your-domain.com;
 
     location /api/ {
-        proxy_pass http://localhost:3000;
+        proxy_pass http://localhost:3001;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
     }
 
     location / {
@@ -141,137 +150,43 @@ server {
 }
 ```
 
-## Monitoreo y Salud
-
-### Health Checks
-
-- **Backend**: `GET /health`
-- **Frontend**: `GET /health`
-
-### Logs
-
-- **Backend**: Configurado con Winston
-- **Frontend**: Accesos a través de Nginx
-- **Base de datos**: Logs de MySQL
-
-## Seguridad
-
-### Certificados SSL
-
-Para producción, configura certificados SSL:
-
-1. Obtén certificados (Let's Encrypt recomendado)
-2. Coloca los archivos en `docker/nginx/ssl/`
-3. Actualiza la configuración de Nginx
-
-### Firewall
-
-Asegúrate de abrir los puertos necesarios:
-- `80` (HTTP)
-- `443` (HTTPS)
-- `3306` (MySQL, solo si es acceso externo)
-
-## Backup
-
-### Base de Datos
-
-```bash
-# Backup
-docker exec gestion-metas-mysql mysqldump -u root -p gestion_metas > backup.sql
-
-# Restaurar
-docker exec -i gestion-metas-mysql mysql -u root -p gestion_metas < backup.sql
-```
-
-### Archivos
-
-```bash
-# Backup de volúmenes
-docker run --rm -v gestion-metas_mysql_data:/data -v $(pwd):/backup alpine tar czf /backup/mysql-backup.tar.gz -C /data .
-```
-
-## Escalado
-
-### Horizontal Scaling
-
-Para múltiples instancias del backend:
-
-```yaml
-# docker-compose.yml
-backend:
-  deploy:
-    replicas: 3
-  # ... otras configuraciones
-```
-
-### Load Balancing
-
-Nginx puede configurarse para balancear carga:
-
-```nginx
-upstream backend {
-    server backend1:3000;
-    server backend2:3000;
-    server backend3:3000;
-}
-
-server {
-    location /api/ {
-        proxy_pass http://backend;
-    }
-}
+Para producción, construir el frontend primero:
+```powershell
+cd frontend
+npm run build
+# Los archivos quedan en frontend/build/
 ```
 
 ## Troubleshooting
 
-### Problemas Comunes
+### MySQL no responde (ECONNREFUSED 3306)
 
-1. **Error de conexión a la base de datos**
-   - Verifica que MySQL esté corriendo
-   - Confirma las credenciales en `.env`
+```powershell
+# Verificar si está corriendo
+netstat -an | findstr ":3306"
 
-2. **Error de permisos**
-   - Asegúrate que los volúmenes tengan los permisos correctos
-   - Ejecuta `chown` si es necesario
+# Ver proceso
+Get-Process -Name "mysqld" -ErrorAction SilentlyContinue
 
-3. **Frontend no carga**
-   - Verifica que el backend esté accesible
-   - Revisa la configuración de CORS
-
-### Logs Útiles
-
-```bash
-# Logs de todos los servicios
-docker-compose logs
-
-# Logs de un servicio específico
-docker-compose logs backend
-
-# Logs en tiempo real
-docker-compose logs -f
+# Iniciar manualmente
+Start-Process -FilePath "C:\Program Files\MySQL\MySQL Server 8.4\bin\mysqld.exe" -ArgumentList "--defaults-file=`"C:\ProgramData\MySQL\MySQL Server 8.4\my.ini`"" -WindowStyle Hidden
 ```
 
-## Actualización
+### Puerto 3001 en uso
 
-### Actualizar Aplicación
-
-```bash
-# Descargar cambios
-git pull
-
-# Reconstruir imágenes
-docker-compose build
-
-# Reiniciar servicios
-docker-compose up -d
+```powershell
+# Identificar proceso
+netstat -ano | findstr ":3001"
+# Terminar proceso (reemplazar <PID>)
+taskkill /PID <PID> /F
 ```
 
-### Actualizar Base de Datos
+### Error de migraciones Prisma
 
-```bash
-# Generar nuevas migraciones
-npx prisma migrate dev
-
-# Aplicar en producción
+```powershell
+cd backend
+# Regenerar cliente
+npx prisma generate
+# Re-aplicar migraciones
 npx prisma migrate deploy
 ```

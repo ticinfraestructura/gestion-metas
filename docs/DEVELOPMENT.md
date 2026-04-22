@@ -17,29 +17,35 @@ git clone <repository-url>
 cd gestion-metas
 ```
 
-2. **Configurar variables de entorno**
-```bash
-# Copiar archivo de ejemplo
-cp .env.example .env
-
-# Editar con tus configuraciones
-nano .env
+2. **Crear `backend/.env`**
+```env
+DATABASE_URL="mysql://root:@localhost:3306/gestion_metas"
+PORT=3001
+JWT_SECRET="your-super-secret-jwt-key-change-in-production"
 ```
 
-3. **Configurar base de datos**
+3. **Configurar MySQL local**
 
-#### Opción A: Con Docker
-```bash
-# Iniciar MySQL
-docker run --name mysql-dev -e MYSQL_ROOT_PASSWORD=rootpassword -e MYSQL_DATABASE=gestion_metas -p 3306:3306 -d mysql:8.0
+MySQL 8.4 debe estar instalado y corriendo en el puerto 3306.
+
+Verificar que MySQL esté activo:
+```powershell
+netstat -an | findstr ":3306"
 ```
 
-#### Opción B: MySQL Local
-```sql
-CREATE DATABASE gestion_metas CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-CREATE USER 'gestion_user'@'localhost' IDENTIFIED BY 'gestion_password';
-GRANT ALL PRIVILEGES ON gestion_metas.* TO 'gestion_user'@'localhost';
-FLUSH PRIVILEGES;
+Crear la base de datos si no existe:
+```powershell
+& "C:\Program Files\MySQL\MySQL Server 8.4\bin\mysql.exe" -u root -e "CREATE DATABASE IF NOT EXISTS gestion_metas CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+```
+
+4. **Aplicar esquema y cargar datos**
+```bash
+cd backend
+npx prisma migrate dev --name init   # desarrollo (crea migración)
+# o
+npx prisma migrate deploy            # producción (aplica migraciones existentes)
+
+node seed-mysql.js                   # datos iniciales (solo primera vez)
 ```
 
 ## Backend
@@ -55,45 +61,29 @@ npm install
 # Generar cliente Prisma
 npx prisma generate
 
-# Ejecutar migraciones
-npx prisma migrate dev
+# Aplicar migraciones
+npx prisma migrate deploy
 
-# (Opcional) Ejecutar seed
-npx prisma db seed
+# Poblar datos iniciales (solo primera vez)
+node seed-mysql.js
+
+# Iniciar servidor
+node src/server-mysql.js
 ```
 
 ### Scripts Disponibles
 
 ```bash
-# Desarrollo con hot reload
-npm run dev
+node src/server-mysql.js   # Iniciar servidor (Express + Prisma + MySQL)
 
-# Construir para producción
-npm run build
+npm run db:generate        # Regenerar cliente Prisma
+npm run db:migrate         # Crear y aplicar migración (desarrollo)
+npm run db:deploy          # Aplicar migraciones existentes (producción)
+npm run db:studio          # Abrir Prisma Studio (UI visual de BD)
+npm run db:seed:mysql      # Ejecutar seed-mysql.js
 
-# Iniciar en producción
-npm start
-
-# Ejecutar tests
-npm test
-
-# Tests en modo watch
-npm run test:watch
-
-# Coverage de tests
-npm run test:coverage
-
-# Linting
-npm run lint
-
-# Corregir linting
-npm run lint:fix
-
-# Base de datos
-npm run db:generate    # Generar cliente Prisma
-npm run db:migrate      # Ejecutar migraciones
-npm run db:studio      # Abrir Prisma Studio
-npm run db:seed        # Ejecutar seed
+npm run lint               # Linting
+npm run lint:fix           # Corregir linting
 ```
 
 ### Estructura del Backend
@@ -101,18 +91,13 @@ npm run db:seed        # Ejecutar seed
 ```
 backend/
 ├── src/
-│   ├── controllers/     # Lógica de controladores
-│   ├── middleware/       # Middleware personalizado
-│   ├── repositories/     # Acceso a datos
-│   ├── routes/          # Definición de rutas
-│   ├── services/        # Lógica de negocio
-│   ├── shared/          # Utilidades compartidas
-│   ├── types/           # Tipos TypeScript
-│   └── utils/           # Funciones utilitarias
+│   └── server-mysql.js   # Servidor principal (Express + Prisma)
 ├── prisma/
-│   ├── schema.prisma     # Esquema de base de datos
-│   └── seed.ts          # Datos iniciales
-└── dist/               # Código compilado
+│   ├── schema.prisma      # Esquema MySQL
+│   └── migrations/        # Historial de migraciones
+├── seed-mysql.js          # Datos iniciales
+├── uploads/               # Archivos adjuntos (creado automáticamente)
+└── .env                   # Variables de entorno (no versionado)
 ```
 
 ## Frontend

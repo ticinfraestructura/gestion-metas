@@ -1,9 +1,9 @@
 # Documentación Técnica de Instalación
 ## Sistema de Gestión de Metas y Contratistas
 
-**Versión:** 1.0.0  
+**Versión:** 1.1.0  
 **Fecha:** Abril 2026  
-**Estado:** Producción (Servidor Minimal)
+**Estado:** Producción (MySQL + Prisma ORM)
 
 ---
 
@@ -46,13 +46,19 @@ Aplicación web para la **gestión integral de metas, contratistas, alcances y a
 ┌─────────────────────┐         HTTP/REST          ┌──────────────────────────┐
 │   Frontend          │ ──────────────────────────▶ │   Backend                │
 │   React 18 + TS     │       localhost:3001        │   Node.js + Express      │
-│   Tailwind CSS      │ ◀────────────────────────── │   server-minimal.js      │
-│   Zustand (estado)  │         JSON API            │   Datos en memoria RAM   │
+│   Tailwind CSS      │ ◀────────────────────────── │   server-mysql.js        │
+│   Zustand (estado)  │         JSON API            │   Prisma ORM + MySQL 8.4 │
 │   Puerto: 3000      │                             │   Puerto: 3001           │
 └─────────────────────┘                             └──────────────────────────┘
+                                                               │
+                                                    ┌──────────────────────────┐
+                                                    │   MySQL 8.4              │
+                                                    │   Puerto: 3306           │
+                                                    │   DB: gestion_metas      │
+                                                    └──────────────────────────┘
 ```
 
-> ⚠️ **Importante:** El sistema **no utiliza base de datos**. Todos los datos se almacenan en memoria RAM del proceso Node.js. Los datos se reinician al reiniciar el backend. Los archivos subidos en Avances sí persisten en disco (`backend/uploads/`).
+> ✅ **Persistencia real:** Todos los datos se almacenan en MySQL y sobreviven reinicios del servidor. Los archivos adjuntos persisten en `backend/uploads/`.
 
 ---
 
@@ -64,6 +70,7 @@ Aplicación web para la **gestión integral de metas, contratistas, alcances y a
 |----------|---------------|---------------|
 | **Node.js** | 18.0.0 | `node --version` |
 | **npm** | 9.0.0 | `npm --version` |
+| **MySQL** | 8.0+ | `mysql --version` |
 | **Navegador** | Chrome 90+, Firefox 88+, Edge 90+ | — |
 
 ### Puertos requeridos
@@ -71,7 +78,8 @@ Aplicación web para la **gestión integral de metas, contratistas, alcances y a
 | Puerto | Servicio | Protocolo |
 |--------|----------|-----------|
 | **3000** | Frontend React | HTTP |
-| **3001** | Backend API | HTTP |
+| **3001** | Backend API (Express + Prisma) | HTTP |
+| **3306** | MySQL 8.4 | TCP |
 
 Verificar que los puertos estén libres antes de iniciar:
 
@@ -104,13 +112,19 @@ gestion-metas/
 │
 ├── backend/
 │   ├── src/
-│   │   └── server-minimal.js     ← Servidor Express (único archivo activo del backend)
-│   ├── uploads/                  ← Archivos subidos por usuarios (se crea automáticamente)
+│   │   └── server-mysql.js       ← Servidor Express + Prisma (archivo activo del backend)
+│   ├── prisma/
+│   │   ├── schema.prisma         ← Esquema de BD (MySQL)
+│   │   └── migrations/           ← Historial de migraciones Prisma
+│   ├── seed-mysql.js             ← Script para poblar datos iniciales
+│   ├── uploads/                  ← Archivos adjuntos (se crea automáticamente)
+│   ├── .env                      ← Variables de entorno (no versionado)
 │   ├── package.json
-│   └── node_modules/             ← Dependencias (se genera con npm install)
+│   └── node_modules/
 │
 ├── frontend/
 │   ├── src/
+│   │   ├── config.ts             ← URL dinámica del API (localhost / red local)
 │   │   ├── pages/
 │   │   │   ├── Login.tsx         ← Pantalla de inicio de sesión
 │   │   │   ├── Dashboard.tsx     ← Estadísticas y KPIs
@@ -118,21 +132,18 @@ gestion-metas/
 │   │   │   ├── Contratistas.tsx  ← Gestión de contratistas y alcances
 │   │   │   ├── Avances.tsx       ← Registro de avances
 │   │   │   ├── Usuarios.tsx      ← Gestión de usuarios (solo ADMIN)
-│   │   │   ├── Reportes.tsx      ← Reportes
+│   │   │   ├── Reportes.tsx      ← Reportes filtrables
 │   │   │   └── Perfil.tsx        ← Perfil de usuario
 │   │   ├── components/
 │   │   │   └── Layout.tsx        ← Navegación lateral y estructura principal
 │   │   ├── store/
 │   │   │   └── authStore.ts      ← Estado global de autenticación (Zustand)
-│   │   ├── services/
-│   │   │   └── api.ts            ← Cliente HTTP hacia el backend (Axios)
-│   │   └── types/
-│   │       └── index.ts          ← Tipos TypeScript compartidos
+│   │   └── services/
+│   │       └── api.ts            ← Cliente HTTP hacia el backend (Axios)
 │   ├── public/
 │   ├── package.json
-│   └── node_modules/             ← Dependencias (se genera con npm install)
+│   └── node_modules/
 │
-├── INICIO-RAPIDO.bat             ← Script de inicio automático (Windows)
 ├── INSTALACION.md                ← Este documento
 └── README.md                     ← Descripción general del proyecto
 ```
@@ -196,21 +207,21 @@ Dependencias clave que se instalarán:
 
 ### Backend
 
-El backend no requiere archivo `.env`. Los valores se configuran como variables de entorno del sistema operativo o al ejecutar el comando.
+El backend requiere el archivo `backend/.env` con las siguientes variables:
+
+```env
+DATABASE_URL="mysql://root:@localhost:3306/gestion_metas"
+PORT=3001
+JWT_SECRET="your-super-secret-jwt-key-change-in-production"
+```
 
 | Variable | Valor por defecto | Descripción |
 |----------|------------------|-------------|
+| `DATABASE_URL` | `mysql://root:@localhost:3306/gestion_metas` | Conexión a MySQL |
 | `PORT` | `3001` | Puerto del servidor Express |
+| `JWT_SECRET` | — | Clave para firmar tokens JWT |
 
-Ejemplo para cambiar el puerto:
-```powershell
-# Windows
-set PORT=3001 && node src/server-minimal.js
-```
-```bash
-# Linux / macOS
-PORT=3001 node src/server-minimal.js
-```
+> ⚠️ El archivo `.env` **no se versiona en git** (está en `.gitignore`). Si clonas el proyecto en una nueva máquina, debes crearlo manualmente.
 
 ### Frontend
 
@@ -243,30 +254,26 @@ REACT_APP_ENV=development
 ### Método A — Manual (dos terminales)
 
 **Terminal 1 — Iniciar el Backend:**
-```bash
+```powershell
 cd backend
-node src/server-minimal.js
+node src/server-mysql.js
 ```
 
 Salida esperada:
 ```
-🚀 Servidor backend corriendo en puerto 3001
+🚀 Servidor MySQL+Prisma corriendo en puerto 3001
 📊 API disponible en: http://localhost:3001/api
-🏥 Health check: http://localhost:3001/health
+🗄️  Base de datos: MySQL via Prisma
 ```
 
 **Terminal 2 — Iniciar el Frontend:**
 
 ```powershell
-# Windows
 cd frontend
-set PORT=3000 && npm start
+npm start
 ```
-```bash
-# Linux / macOS
-cd frontend
-PORT=3000 npm start
-```
+
+> **Windows:** MySQL arranca automáticamente con el equipo (Task Scheduler configurado). No es necesario iniciarlo manualmente.
 
 Salida esperada (puede tardar 30–60 segundos la primera vez):
 ```
@@ -276,15 +283,21 @@ No issues found.
 
 El navegador se abrirá automáticamente en `http://localhost:3000`. Si no abre, navegue manualmente a esa URL.
 
-### Método B — Script automático (solo Windows)
+### Método B — Verificar que MySQL esté corriendo
 
-Ejecutar el archivo `INICIO-RAPIDO.bat` en la raíz del proyecto haciendo doble clic o desde consola:
+Antes de iniciar el backend, confirmar que MySQL está activo:
 
-```cmd
-INICIO-RAPIDO.bat
+```powershell
+netstat -an | findstr ":3306"
+# Debe mostrar: TCP 0.0.0.0:3306 ... LISTENING
 ```
 
-Este script inicia automáticamente el backend (puerto 3001) y el frontend. Presionar cualquier tecla detiene ambos servicios.
+Si MySQL no está corriendo, iniciarlo manualmente:
+
+```powershell
+Start-Process -FilePath "C:\Program Files\MySQL\MySQL Server 8.4\bin\mysqld.exe" -ArgumentList "--defaults-file=`"C:\ProgramData\MySQL\MySQL Server 8.4\my.ini`"" -WindowStyle Hidden
+Start-Sleep -Seconds 4
+```
 
 ### Verificación del sistema
 
@@ -471,24 +484,28 @@ El módulo **Usuarios** solo aparece en el menú de navegación cuando el usuari
 
 ## 10. Notas sobre Persistencia de Datos
 
-### Datos en memoria (temporales)
+### Datos en MySQL (persistentes)
 
-Los siguientes datos se **pierden al reiniciar el backend**:
+Todos los datos **persisten entre reinicios** del backend y del equipo:
 
-- Metas, contratistas, avances, alcances creados durante la sesión
-- Usuarios nuevos o modificados
-- Cambios de contraseñas
+- Metas, contratistas, avances, alcances, usuarios → Base de datos `gestion_metas` en MySQL
+- Cada cambio se guarda en disco inmediatamente vía Prisma ORM
 
-Al reiniciar el backend, el sistema carga automáticamente los datos de ejemplo precargados:
-- 5 usuarios
-- 5 metas (META-001 a META-005)
-- 12 contratistas (CONT-001 a CONT-012)
-- 13 alcances
-- ~50 avances de ejemplo
+### Datos iniciales cargados por `seed-mysql.js`
 
-### Archivos en disco (persistentes)
+| Entidad | Cantidad |
+|---------|----------|
+| Usuarios | 5 (2 ADMIN, 3 USUARIO) |
+| Metas | 5 (META-001 a META-005) |
+| Contratistas | 12 (CONT-001 a CONT-012) + NG (Nicolas Giraldo) |
+| Alcances | 13 |
+| Avances | 18 |
 
-Los archivos subidos como adjuntos en Avances **sí persisten** en disco:
+> ⚠️ `node seed-mysql.js` solo debe ejecutarse **una vez** en la primera instalación. Si se ejecuta de nuevo sobre una BD con datos, fallará por conflictos de unicidad.
+
+### Archivos adjuntos (persistentes)
+
+Los archivos subidos en Avances persisten en disco:
 
 ```
 backend/uploads/
@@ -497,7 +514,17 @@ backend/uploads/
 └── ...
 ```
 
-Esta carpeta se crea automáticamente si no existe al iniciar el backend.
+Esta carpeta se crea automáticamente al iniciar el backend si no existe.
+
+### Backup de datos
+
+```powershell
+# Exportar toda la BD a un archivo SQL
+& "C:\Program Files\MySQL\MySQL Server 8.4\bin\mysqldump.exe" -u root gestion_metas > backup.sql
+
+# Restaurar desde backup
+& "C:\Program Files\MySQL\MySQL Server 8.4\bin\mysql.exe" -u root gestion_metas < backup.sql
+```
 
 ---
 
@@ -545,15 +572,34 @@ En ese caso, abrir el navegador en `http://localhost:3002`.
 ### Error "Cannot connect to server" o CORS
 
 Verificar que el backend esté corriendo:
-```bash
+```powershell
 curl http://localhost:3001/health
-# Debe responder: {"status":"ok","timestamp":"..."}
+# Debe responder: {"status":"ok","db":"mysql","timestamp":"..."}
+```
+
+Verificar que MySQL esté activo:
+```powershell
+netstat -an | findstr ":3306"
+```
+
+Si MySQL no responde, iniciarlo:
+```powershell
+Start-Process -FilePath "C:\Program Files\MySQL\MySQL Server 8.4\bin\mysqld.exe" -ArgumentList "--defaults-file=`"C:\ProgramData\MySQL\MySQL Server 8.4\my.ini`"" -WindowStyle Hidden
 ```
 
 Si el backend no responde, reiniciarlo:
-```bash
+```powershell
 cd backend
-node src/server-minimal.js
+node src/server-mysql.js
+```
+
+### Error de conexión a MySQL (ECONNREFUSED 3306)
+
+1. Verificar que MySQL esté corriendo (ver arriba)
+2. Verificar que `backend/.env` exista con `DATABASE_URL` correcta
+3. Verificar que la BD `gestion_metas` exista:
+```powershell
+& "C:\Program Files\MySQL\MySQL Server 8.4\bin\mysql.exe" -u root -e "SHOW DATABASES;"
 ```
 
 ### `npm install` falla con errores de versión
@@ -601,51 +647,67 @@ Esto ocurre dentro de la misma sesión del navegador (comportamiento esperado). 
 
 ## 12. Inicio Rápido (Windows)
 
-Para usuarios de Windows existe un script de inicio automático en la raíz del proyecto:
+Pasos para iniciar el sistema en Windows:
 
-```
-INICIO-RAPIDO.bat
-```
+1. **MySQL** arranca automáticamente con el equipo (Task Scheduler configurado). Verificar:
+   ```powershell
+   netstat -an | findstr ":3306"
+   ```
 
-**Cómo usarlo:**
-1. Navegar a la carpeta raíz del proyecto en el Explorador de Windows
-2. Hacer doble clic en `INICIO-RAPIDO.bat`
-3. Se abrirán ventanas de terminal para el backend y frontend
-4. Esperar a que ambos servicios estén listos (~15 segundos)
-5. Abrir el navegador en `http://localhost:3000`
-6. Presionar cualquier tecla en la ventana del script para detener todos los servicios
+2. **Backend** — abrir PowerShell en la carpeta del proyecto:
+   ```powershell
+   cd backend
+   node src/server-mysql.js
+   ```
 
-> ⚠️ **Requisito:** Las dependencias deben estar instaladas previamente con `npm install` en ambas carpetas (`backend/` y `frontend/`) antes de usar este script.
+3. **Frontend** — abrir otra terminal:
+   ```powershell
+   cd frontend
+   npm start
+   ```
+
+4. Abrir el navegador en **http://localhost:3000**
+
+**Acceso desde otros dispositivos en la red:**
+- Frontend: `http://192.168.1.34:3000`
+- Backend API: `http://192.168.1.34:3001/api`
 
 ---
 
 ## Resumen de Comandos
 
 ```bash
-# ── INSTALACIÓN (una sola vez) ──────────────────────────────────────
-cd backend  &&  npm install
-cd frontend &&  npm install
+# ── PRIMERA INSTALACIÓN (una sola vez) ─────────────────────────────
+cd backend  && npm install
+cd frontend && npm install
 
-# ── INICIO DEL SISTEMA ──────────────────────────────────────────────
+# Crear .env en backend/ con:
+# DATABASE_URL="mysql://root:@localhost:3306/gestion_metas"
+# PORT=3001
+
+# Aplicar esquema a MySQL y cargar datos iniciales
+cd backend
+npx prisma migrate deploy
+node seed-mysql.js
+
+# ── INICIO DIARIO ────────────────────────────────────────────────────
+# MySQL arranca automáticamente (Task Scheduler)
+
 # Terminal 1 — Backend
 cd backend
-node src/server-minimal.js
+node src/server-mysql.js
 
-# Terminal 2 — Frontend (Windows)
+# Terminal 2 — Frontend
 cd frontend
-set PORT=3000 && npm start
+npm start
 
-# Terminal 2 — Frontend (Linux/macOS)
-cd frontend
-PORT=3000 npm start
-
-# ── VERIFICACIÓN ────────────────────────────────────────────────────
-# Health check del backend
+# ── VERIFICACIÓN ─────────────────────────────────────────────────────
 curl http://localhost:3001/health
+# Respuesta esperada: {"status":"ok","db":"mysql","timestamp":"..."}
 
-# ── ACCESO ──────────────────────────────────────────────────────────
-# Abrir en el navegador:
-http://localhost:3000
+# ── ACCESO ───────────────────────────────────────────────────────────
+# Local:        http://localhost:3000
+# Red local:    http://192.168.1.34:3000
 
 # Credenciales de administrador:
 # Email:    admin@gestionmetas.com
@@ -654,4 +716,4 @@ http://localhost:3000
 
 ---
 
-*Documento generado para el Sistema de Gestión de Metas v1.0.0 — Arquitectura: Node.js + React (servidor minimal sin base de datos)*
+*Documento generado para el Sistema de Gestión de Metas v1.1.0 — Arquitectura: Node.js + React + MySQL 8.4 + Prisma ORM*

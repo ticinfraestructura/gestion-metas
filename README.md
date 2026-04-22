@@ -1,336 +1,200 @@
 # Aplicación de Gestión de Metas y Contratistas
 
-Aplicación web enterprise-ready para gestión de metas, contratistas y avances con autenticación segura, validación por email y dashboard de KPIs.
+Aplicación web para la gestión integral de metas, contratistas, alcances y avances de proyectos. Incluye autenticación JWT, dashboard de KPIs, reportes y persistencia real con MySQL.
 
 ## 🚀 Características
 
-- ✅ **Autenticación Segura**: JWT con validación por email y system de bloqueo
-- ✅ **Gestión Completa**: CRUD para usuarios, metas, contratistas y avances
-- ✅ **Dashboard Analytics**: KPIs y reportes en tiempo real
-- ✅ **Seguridad Hardening**: CORS, prevención de SQL injection, rate limiting
-- ✅ **Dockerización**: Despliegue on-premise con contenedores
-- ✅ **Integración Nginx**: Reverse proxy con configuración de producción
-- ✅ **Principios DRY**: Código limpio y documentación completa
+- ✅ **Persistencia Real**: MySQL 8.4 con Prisma ORM — los datos no se pierden al reiniciar
+- ✅ **Autenticación JWT**: Login seguro con roles ADMIN y USUARIO
+- ✅ **Gestión Completa**: CRUD para metas, contratistas, alcances, avances y usuarios
+- ✅ **Dashboard Analytics**: KPIs consolidados, gráfico de barras y avances recientes
+- ✅ **Reportes**: Tablas filtrables de metas, contratistas, avances y alcances
+- ✅ **Archivos adjuntos**: Subida de imágenes y documentos en avances (hasta 10 MB)
+- ✅ **Acceso en red local**: URL dinámica — funciona desde `localhost` y desde otros dispositivos en la misma red
 
 ## 🏗️ Arquitectura
 
-- **Backend**: Node.js, TypeScript, Express.js, Prisma ORM, MySQL
+```
+┌─────────────────────┐         HTTP/REST          ┌──────────────────────────┐
+│   Frontend          │ ──────────────────────────▶ │   Backend                │
+│   React 18 + TS     │       localhost:3001        │   Node.js + Express      │
+│   Tailwind CSS      │ ◀────────────────────────── │   server-mysql.js        │
+│   Zustand (estado)  │         JSON API            │   Prisma ORM + MySQL 8.4 │
+│   Puerto: 3000      │                             │   Puerto: 3001           │
+└─────────────────────┘                             └──────────────────────────┘
+                                                               │
+                                                    ┌──────────────────────────┐
+                                                    │   MySQL 8.4              │
+                                                    │   Base de datos          │
+                                                    │   Puerto: 3306           │
+                                                    │   DB: gestion_metas      │
+                                                    └──────────────────────────┘
+```
+
+- **Backend**: Node.js, Express.js, Prisma ORM, MySQL 8.4
 - **Frontend**: React 18, TypeScript, Tailwind CSS, Zustand
-- **DevOps**: Docker, Docker Compose, Nginx
-- **Seguridad**: JWT, bcrypt, validación email, hardening
-- **Testing**: Jest, TypeScript testing
-- **Documentación**: JSDoc, Swagger/OpenAPI
+- **Base de datos**: MySQL 8.4 local (auto-arranque vía Task Scheduler en Windows)
 
 ## 📁 Estructura del Proyecto
 
 ```
 gestion-metas/
-├── backend/                 # API RESTful con Node.js
+├── backend/
 │   ├── src/
-│   │   ├── controllers/    # Lógica de controladores
-│   │   ├── middleware/      # Middleware personalizado
-│   │   ├── repositories/    # Acceso a datos
-│   │   ├── routes/         # Definición de rutas
-│   │   ├── services/       # Lógica de negocio
-│   │   ├── shared/         # Utilidades compartidas
-│   │   ├── types/          # Tipos TypeScript
-│   │   └── utils/          # Funciones utilitarias
+│   │   └── server-mysql.js      ← Servidor principal (Express + Prisma)
 │   ├── prisma/
-│   │   ├── schema.prisma   # Esquema de base de datos
-│   │   └── seed.ts        # Datos iniciales
-│   └── dist/              # Código compilado
-├── frontend/               # Aplicación React
+│   │   ├── schema.prisma        ← Esquema MySQL (Prisma)
+│   │   └── migrations/          ← Historial de migraciones
+│   ├── seed-mysql.js            ← Datos iniciales de la BD
+│   ├── uploads/                 ← Archivos adjuntos (persistentes)
+│   ├── .env                     ← Variables de entorno (no versionado)
+│   └── package.json
+├── frontend/
 │   ├── src/
-│   │   ├── components/     # Componentes reutilizables
-│   │   ├── pages/         # Páginas de la aplicación
-│   │   ├── services/      # Servicios API
-│   │   ├── store/         # Estado global (Zustand)
-│   │   ├── types/         # Tipos TypeScript
-│   │   └── utils/         # Utilidades
-│   └── public/            # Archivos estáticos
-├── docker/                 # Configuración Docker
-│   ├── Dockerfile.backend
-│   ├── Dockerfile.frontend
-│   └── nginx.conf
-├── docs/                   # Documentación
+│   │   ├── config.ts            ← URL dinámica del API (red local / localhost)
+│   │   ├── pages/               ← Dashboard, Metas, Contratistas, Avances, etc.
+│   │   ├── components/          ← Layout y componentes reutilizables
+│   │   ├── store/               ← Estado global de autenticación (Zustand)
+│   │   └── services/api.ts      ← Cliente HTTP (Axios)
+│   └── package.json
+├── docs/
 │   ├── API.md
 │   ├── DEPLOYMENT.md
 │   └── DEVELOPMENT.md
-├── scripts/                # Scripts de despliegue
-│   ├── setup.sh
-│   └── setup.ps1
-├── docker-compose.yml       # Producción
-├── docker-compose.dev.yml  # Desarrollo
-├── .env.example           # Variables de entorno
-└── README.md              # Este archivo
+├── INSTALACION.md
+└── README.md
 ```
 
 ## 🚀 Inicio Rápido
 
 ### Prerrequisitos
 
-- Node.js 18+
-- Docker y Docker Compose
-- MySQL 8.0+ (para desarrollo local)
-- Nginx (existente, para producción)
+| Software | Versión mínima |
+|----------|---------------|
+| Node.js  | 18.0.0        |
+| npm      | 9.0.0         |
+| MySQL    | 8.0+          |
 
-### 1. Configuración Automática (Recomendado)
+### Primera instalación
 
-**Windows (PowerShell):**
 ```powershell
-.\scripts\setup.ps1
-```
+# 1. Instalar dependencias
+cd backend  && npm install
+cd frontend && npm install
 
-**Linux/macOS:**
-```bash
-chmod +x scripts/setup.sh
-./scripts/setup.sh
-```
+# 2. Configurar base de datos (backend/.env ya incluido)
+# DATABASE_URL="mysql://root:@localhost:3306/gestion_metas"
 
-### 2. Configuración Manual
-
-#### Copiar variables de entorno
-```bash
-cp .env.example .env
-# Editar .env con tus configuraciones
-```
-
-#### Desarrollo con Docker
-```bash
-docker-compose -f docker-compose.dev.yml up -d
-```
-
-#### Desarrollo local
-```bash
-# Backend
+# 3. Crear tablas y poblar datos iniciales
 cd backend
-npm install
-npx prisma generate
-npx prisma migrate dev
-npx prisma db seed
-npm run dev
+npx prisma migrate deploy
+node seed-mysql.js
+```
 
-# Frontend (en otra terminal)
+### Inicio diario
+
+```powershell
+# Terminal 1 — Backend
+cd backend
+node src/server-mysql.js
+
+# Terminal 2 — Frontend
 cd frontend
-npm install
 npm start
 ```
 
-#### Producción
-```bash
-docker-compose up -d --build
-```
+> **Windows:** MySQL arranca automáticamente al encender el equipo (Task Scheduler). Solo necesitas iniciar el backend y el frontend.
 
 ## 🌐 Acceso a la Aplicación
 
-- **Frontend (Desarrollo)**: http://localhost:3001
-- **Frontend (Producción)**: http://localhost:80
-- **Backend API**: http://localhost:3000/api
-- **Base de Datos**: localhost:3306
+| Recurso | URL local | URL red local |
+|---------|-----------|---------------|
+| **Frontend** | http://localhost:3000 | http://\<IP-del-servidor\>:3000 |
+| **Backend API** | http://localhost:3001/api | http://\<IP-del-servidor\>:3001/api |
+| **Health check** | http://localhost:3001/health | — |
 
-### Usuarios por Defecto
+> La IP del servidor en esta máquina es `192.168.1.34`.
 
-Después de ejecutar el seed:
+### Usuarios por defecto
 
-- **Administrador**: admin@gestionmetas.com / admin123
-- **Usuario**: usuario@gestionmetas.com / user123
+| Rol | Email | Contraseña |
+|-----|-------|-----------|
+| **ADMIN** | admin@gestionmetas.com | admin123 |
+| **USUARIO** | usuario@gestionmetas.com | user123 |
 
-## 📚 Documentación
+## � Variables de Entorno (`backend/.env`)
 
-- **[API Documentation](docs/API.md)**: Endpoints y ejemplos
-- **[Deployment Guide](docs/DEPLOYMENT.md)**: Guía de despliegue completo
-- **[Development Guide](docs/DEVELOPMENT.md)**: Guía para desarrolladores
-
-## 🛠️ Scripts Disponibles
-
-### Backend
-```bash
-npm run dev              # Desarrollo con hot reload
-npm run build            # Construir para producción
-npm start                # Iniciar en producción
-npm test                 # Ejecutar tests
-npm run test:watch       # Tests en modo watch
-npm run test:coverage    # Coverage de tests
-npm run lint             # Linting
-npm run lint:fix         # Corregir linting
-npm run db:generate      # Generar cliente Prisma
-npm run db:migrate        # Ejecutar migraciones
-npm run db:studio        # Abrir Prisma Studio
-npm run db:seed          # Ejecutar seed
-```
-
-### Frontend
-```bash
-npm start                # Desarrollo
-npm run build            # Construir para producción
-npm test                 # Ejecutar tests
-npm run lint             # Linting
-npm run format           # Formatear código
-```
-
-## 🔧 Variables de Entorno
-
-### Base de Datos
 ```env
-MYSQL_ROOT_PASSWORD=rootpassword
-MYSQL_DATABASE=gestion_metas
-MYSQL_USER=gestion_user
-MYSQL_PASSWORD=gestion_password
+DATABASE_URL="mysql://root:@localhost:3306/gestion_metas"
+PORT=3001
+JWT_SECRET="your-super-secret-jwt-key-change-in-production"
 ```
 
-### Backend
-```env
-NODE_ENV=production
-PORT=3000
-DATABASE_URL=mysql://gestion_user:gestion_password@localhost:3306/gestion_metas
-JWT_SECRET=your-super-secret-jwt-key-change-in-production
-CORS_ORIGIN=http://localhost:3001
-CORS_CREDENTIALS=true
-RATE_LIMIT_WINDOW_MS=900000
-RATE_LIMIT_MAX_REQUESTS=100
-```
-
-### Frontend
-```env
-REACT_APP_API_URL=http://localhost:3000/api
-REACT_APP_ENV=production
-```
-
-### Email (Opcional)
-```env
-EMAIL_HOST=smtp.gmail.com
-EMAIL_PORT=587
-EMAIL_USER=your-email@gmail.com
-EMAIL_PASS=your-app-password
-```
-
-## 🐳 Docker
-
-### Servicios
-
-- **mysql**: Base de datos MySQL 8.0
-- **backend**: API Node.js con Express
-- **frontend**: Aplicación React servida por Nginx
-- **nginx**: Reverse proxy (solo producción)
-
-### Volúmenes
-
-- `mysql_data`: Datos persistentes de MySQL
-- `nginx_logs`: Logs de Nginx
-
-### Health Checks
-
-Todos los servicios incluyen health checks para monitoreo:
+## 🛠️ Scripts del Backend
 
 ```bash
-# Ver estado de los servicios
-docker-compose ps
-
-# Ver logs
-docker-compose logs -f
+node src/server-mysql.js     # Iniciar servidor
+npx prisma migrate dev       # Crear y aplicar migración
+npx prisma migrate deploy    # Aplicar migraciones en producción
+node seed-mysql.js           # Poblar BD con datos iniciales
+npm run db:studio            # Abrir Prisma Studio (UI visual de BD)
+npm run db:generate          # Regenerar cliente Prisma
 ```
+
+## 🛠️ Scripts del Frontend
+
+```bash
+npm start        # Servidor de desarrollo (puerto 3000)
+npm run build    # Build de producción
+npm run lint     # Linting TypeScript
+npm run format   # Formatear código
+```
+
+## �️ Datos Iniciales (seed)
+
+Al ejecutar `node seed-mysql.js`:
+
+| Entidad | Cantidad |
+|---------|----------|
+| Usuarios | 5 (2 ADMIN, 3 USUARIO) |
+| Metas | 5 (META-001 a META-005) |
+| Contratistas | 12 (CONT-001 a CONT-012) + NG |
+| Alcances | 13 |
+| Avances | 18 |
 
 ## 🔒 Seguridad
 
-### Implementaciones
+- Autenticación JWT (contraseñas en texto plano en modo dev — cambiar en producción)
+- CORS habilitado para acceso desde red local
+- Rate limiting en Express
+- Prisma ORM previene SQL injection
+- Archivos adjuntos: tipos permitidos JPEG/PNG/GIF/PDF/DOC/XLS, máximo 10 MB
 
-- **Autenticación JWT** con tokens de refresco
-- **Hashing de contraseñas** con bcrypt
-- **Rate limiting** por IP y endpoint
-- **Validación de entrada** con Joi
-- **CORS configurado** para dominios específicos
-- **Headers de seguridad** en Nginx
-- **SQL injection prevention** con Prisma ORM
-- **Auditoría de accesos** y logs de autenticación
+## 💾 Persistencia de Datos
 
-### Best Practices
+Todos los datos se almacenan en MySQL y **persisten entre reinicios**:
 
-- Rotación regular de secrets
-- Monitoreo de logs de acceso
-- Actualizaciones de seguridad regulares
-- Backup automatizado de base de datos
-
-## 🧪 Testing
-
-### Backend (Jest)
-```bash
-cd backend
-npm test                 # Todos los tests
-npm run test:coverage    # Con coverage
-npm run test:watch       # Modo watch
-```
-
-### Frontend (React Testing Library)
-```bash
-cd frontend
-npm test                 # Todos los tests
-npm test --coverage       # Con coverage
-```
-
-## 📊 Monitoreo
-
-### Health Endpoints
-
-- **Backend**: `GET /health`
-- **Frontend**: `GET /health`
-
-### Logs
-
-- **Backend**: Winston con niveles estructurados
-- **Frontend**: Accesos a través de Nginx
-- **Database**: Logs de MySQL
-
-## 🚀 Despliegue
-
-### Producción
-
-1. **Configurar variables de entorno**
-2. **Ejecutar con Docker Compose**:
-   ```bash
-   docker-compose up -d --build
-   ```
-
-### Escalado
-
-La aplicación está preparada para escalado horizontal:
-
-```yaml
-# docker-compose.yml
-backend:
-  deploy:
-    replicas: 3
-```
-
-## 🤝 Contribución
-
-1. Fork el proyecto
-2. Crear rama feature: `git checkout -b feature/nueva-funcionalidad`
-3. Commit cambios: `git commit -m 'feat: agregar nueva funcionalidad'`
-4. Push: `git push origin feature/nueva-funcionalidad`
-5. Pull Request
-
-## 📝 Licencia
-
-MIT License - ver [LICENSE](LICENSE) para detalles.
-
-## 🆘 Soporte
-
-Para soporte técnico:
-
-1. Revisar la [documentación](docs/)
-2. Buscar en [issues](../../issues)
-3. Crear nuevo issue con detalles del problema
+- Metas, contratistas, alcances, avances, usuarios → MySQL (`gestion_metas`)
+- Archivos adjuntos → `backend/uploads/` (disco local)
+- Configuración → `backend/.env` (no versionado en git)
 
 ## 🔄 Actualización
 
-```bash
-# Actualizar código
-git pull main
+```powershell
+git pull origin main
 
-# Reconstruir y reiniciar
-docker-compose up -d --build
+# Si hay cambios de esquema de BD:
+cd backend
+npx prisma migrate deploy
 ```
+
+## � Documentación
+
+- **[INSTALACION.md](INSTALACION.md)**: Guía completa de instalación paso a paso
+- **[docs/API.md](docs/API.md)**: Endpoints y ejemplos de la API
+- **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)**: Guía de despliegue
+- **[docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)**: Guía para desarrolladores
 
 ---
 
-**Desarrollado con ❤️ para gestión eficiente de proyectos**
+*Sistema de Gestión de Metas v1.1.0 — Node.js + React + MySQL 8.4 + Prisma ORM*
