@@ -357,7 +357,7 @@ const Avances: React.FC = () => {
         fetch(`${API_URL}/alcances`),
       ]);
       const [av, m, c, al] = await Promise.all([avRes.json(), mRes.json(), cRes.json(), alRes.json()]);
-      if (av.success) { setAvances(av.data); setFiltered(av.data); }
+      if (av.success) { const sorted = [...av.data].sort((a, b) => new Date(b.fecha_creacion).getTime() - new Date(a.fecha_creacion).getTime()); setAvances(sorted); setFiltered(sorted); }
       else setError('Error al cargar los avances');
       if (m.success)  setMetas(m.data.map((x: Catalogo) => ({ id: x.id, codigo: (x as any).codigo, nombre: x.nombre })));
       if (c.success)  setContratistas(c.data);
