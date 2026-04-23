@@ -6,16 +6,17 @@ import { API_BASE as API } from '../config';
 /* ─── Interfaces ─── */
 interface Meta     { id: number; codigo: string; nombre: string; descripcion: string; estado: string; fecha_limite: string; porcentaje_completacion?: number; creador?: { nombre: string }; }
 interface Contratista { id: number; nombre: string; identificacion: string; contacto: string; telefono: string; estado: string; }
-interface Avance   { id: number; numavance: number; porcentaje_avance: number; descripcion: string; fecha_presentacion: string; meta?: { nombre: string; codigo?: string }; contratista?: { nombre: string; codigo?: string }; alcanceId?: number; }
+interface Avance   { id: number; numavance: number; porcentaje_avance: number; descripcion: string; fecha_presentacion: string; metaId?: number; contratistaId?: number; aporte_meta?: number | null; meta?: { nombre: string; codigo?: string }; contratista?: { nombre: string; codigo?: string }; alcanceId?: number; }
 interface Alcance  { id: number; descripcion: string; periodicidad: string; fecha_inicio: string; fecha_fin: string; porcentaje_asignado: number; meta?: { nombre: string; codigo?: string }; contratista?: { nombre: string }; }
 
-type Tab = 'metas' | 'contratistas' | 'avances' | 'alcances';
+type Tab = 'metas' | 'contratistas' | 'avances' | 'alcances' | 'consolidado';
 
 const TABS: { key: Tab; label: string }[] = [
   { key: 'metas',        label: 'Metas' },
   { key: 'contratistas', label: 'Contratistas' },
   { key: 'avances',      label: 'Avances' },
   { key: 'alcances',     label: 'Alcances' },
+  { key: 'consolidado',  label: '📊 Consolidado por Período' },
 ];
 
 const estadoLabel: Record<string, string> = {
@@ -32,6 +33,20 @@ const periodicidadClass: Record<string, string> = {
   QUINCENAL: 'bg-blue-100 text-blue-700', MENSUAL: 'bg-purple-100 text-purple-700',
 };
 
+type PeriodoTipo = 'mensual' | 'trimestral' | 'semestral';
+const getPeriodRange = (tipo: PeriodoTipo, mes: string, trim: string, sem: string): { start: Date; end: Date; label: string } => {
+  if (tipo === 'mensual') {
+    const [y, m] = mes.split('-').map(Number);
+    return { start: new Date(y, m-1, 1), end: new Date(y, m, 0, 23, 59, 59), label: new Date(y, m-1, 1).toLocaleDateString('es-ES', { month: 'long', year: 'numeric' }).replace(/^./, c => c.toUpperCase()) };
+  }
+  if (tipo === 'trimestral') {
+    const [ys, qs] = trim.split('-Q'); const y = parseInt(ys), q = parseInt(qs), sm = (q-1)*3;
+    return { start: new Date(y, sm, 1), end: new Date(y, sm+3, 0, 23, 59, 59), label: `T${q} ${y} · ${['Ene–Mar','Abr–Jun','Jul–Sep','Oct–Dic'][q-1]}` };
+  }
+  const [ys, hs] = sem.split('-H'); const y = parseInt(ys), h = parseInt(hs), sm = (h-1)*6;
+  return { start: new Date(y, sm, 1), end: new Date(y, sm+6, 0, 23, 59, 59), label: `${h === 1 ? '1er Semestre' : '2do Semestre'} ${y}` };
+};
+
 /* ─── Componente principal ─── */
 const Reportes: React.FC = () => {
   const [tab, setTab]               = useState<Tab>('metas');
@@ -46,6 +61,10 @@ const Reportes: React.FC = () => {
   const [filterContratista, setFilterContratista] = useState('');
   const [filterMes, setFilterMes]           = useState(() => new Date().toISOString().slice(0, 7));
   const printRef = useRef<HTMLDivElement>(null);
+  const [periodoTipo, setPeriodoTipo] = useState<PeriodoTipo>('mensual');
+  const [periodoMes, setPeriodoMes]   = useState(() => new Date().toISOString().slice(0, 7));
+  const [periodoTrim, setPeriodoTrim] = useState(() => { const n = new Date(); return `${n.getFullYear()}-Q${Math.ceil((n.getMonth()+1)/3)}`; });
+  const [periodoSem, setPeriodoSem]   = useState(() => { const n = new Date(); return `${n.getFullYear()}-H${n.getMonth() < 6 ? 1 : 2}`; });
 
   const mesLabel = (ym: string) => {
     if (!ym) return '';
@@ -61,6 +80,16 @@ const Reportes: React.FC = () => {
   const nextMes = () => {
     const d = new Date(filterMes + '-01'); d.setMonth(d.getMonth() + 1);
     setFilterMes(d.toISOString().slice(0, 7));
+  };
+  const prevPeriodo = () => {
+    if (periodoTipo === 'mensual') { const d = new Date(periodoMes+'-01'); d.setMonth(d.getMonth()-1); setPeriodoMes(d.toISOString().slice(0,7)); return; }
+    if (periodoTipo === 'trimestral') { const [y,q] = periodoTrim.split('-Q').map(Number); if (q===1) setPeriodoTrim(`${y-1}-Q4`); else setPeriodoTrim(`${y}-Q${q-1}`); return; }
+    const [y,h] = periodoSem.split('-H').map(Number); if (h===1) setPeriodoSem(`${y-1}-H2`); else setPeriodoSem(`${y}-H1`);
+  };
+  const nextPeriodo = () => {
+    if (periodoTipo === 'mensual') { const d = new Date(periodoMes+'-01'); d.setMonth(d.getMonth()+1); setPeriodoMes(d.toISOString().slice(0,7)); return; }
+    if (periodoTipo === 'trimestral') { const [y,q] = periodoTrim.split('-Q').map(Number); if (q===4) setPeriodoTrim(`${y+1}-Q1`); else setPeriodoTrim(`${y}-Q${q+1}`); return; }
+    const [y,h] = periodoSem.split('-H').map(Number); if (h===2) setPeriodoSem(`${y+1}-H1`); else setPeriodoSem(`${y}-H2`);
   };
 
   const fetchAll = async () => {
@@ -126,7 +155,23 @@ const Reportes: React.FC = () => {
     (!filterEstado || a.periodicidad === filterEstado)
   );
 
-  const currentCount = tab === 'metas' ? filteredMetas.length : tab === 'contratistas' ? filteredContratistas.length : tab === 'avances' ? filteredAvances.length : filteredAlcances.length;
+  const consolidadoPeriodo = getPeriodRange(periodoTipo, periodoMes, periodoTrim, periodoSem);
+  const avancesPeriodo = avances.filter(a => { const d = new Date(a.fecha_presentacion); return d >= consolidadoPeriodo.start && d <= consolidadoPeriodo.end; });
+  const consolidadoData = (metas.map(meta => {
+    const avMeta = avancesPeriodo.filter(a => a.metaId === meta.id);
+    if (!avMeta.length) return null;
+    const byC: Record<string, { nombre: string; codigo: string; count: number; maxPct: number; aporte: number; ultFecha: string }> = {};
+    avMeta.forEach(a => {
+      const k = String(a.contratistaId);
+      if (!byC[k]) byC[k] = { nombre: a.contratista?.nombre||'—', codigo: a.contratista?.codigo||'', count:0, maxPct:0, aporte:0, ultFecha:'' };
+      byC[k].count++; byC[k].maxPct = Math.max(byC[k].maxPct, a.porcentaje_avance||0);
+      byC[k].aporte = Math.round((byC[k].aporte+(a.aporte_meta||0))*100)/100;
+      if (!byC[k].ultFecha || a.fecha_presentacion > byC[k].ultFecha) byC[k].ultFecha = a.fecha_presentacion;
+    });
+    return { meta, rows: Object.values(byC).sort((a,b) => b.maxPct - a.maxPct) };
+  }).filter(Boolean)) as { meta: Meta; rows: { nombre: string; codigo: string; count: number; maxPct: number; aporte: number; ultFecha: string }[] }[];
+
+  const currentCount = tab === 'metas' ? filteredMetas.length : tab === 'contratistas' ? filteredContratistas.length : tab === 'avances' ? filteredAvances.length : tab === 'consolidado' ? consolidadoData.length : filteredAlcances.length;
 
   const handlePrint = () => window.print();
 
@@ -267,6 +312,65 @@ const Reportes: React.FC = () => {
     </>
   );
 
+  const SectionConsolidado = () => (
+    consolidadoData.length === 0
+      ? <div className="flex flex-col items-center gap-2 text-gray-400 py-16"><FileText className="h-10 w-10 opacity-40" /><p className="text-sm font-medium">Sin avances registrados en el período seleccionado</p><p className="text-xs">Cambia el período o registra avances en el sistema</p></div>
+      : <div className="divide-y divide-gray-100">
+          {consolidadoData.map(({ meta, rows }) => {
+            const pct = meta.porcentaje_completacion ?? 0;
+            const pBar = pct>=100?'bg-green-500':pct>=60?'bg-blue-500':pct>=30?'bg-yellow-500':'bg-red-400';
+            const pTxt = pct>=100?'text-green-700':pct>=60?'text-blue-700':pct>=30?'text-yellow-700':'text-red-600';
+            const totalAv = rows.reduce((s,r)=>s+r.count,0);
+            return (
+              <div key={meta.id} className="p-4 hover:bg-gray-50/40">
+                <div className="flex items-center gap-3 mb-3 flex-wrap">
+                  <span className="font-mono text-xs font-bold text-primary-700 bg-primary-50 px-2 py-1 rounded border border-primary-200 flex-shrink-0">{meta.codigo||'—'}</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-gray-900 text-sm">{meta.nombre}</p>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <div className="w-32 bg-gray-200 rounded-full h-1.5"><div className={`h-1.5 rounded-full ${pBar}`} style={{width:`${pct}%`}}/></div>
+                      <span className={`text-xs font-bold ${pTxt}`}>{pct}% completado</span>
+                    </div>
+                  </div>
+                  <span className={`px-2 py-0.5 rounded-full text-xs font-semibold flex-shrink-0 ${estadoClass[meta.estado]||'bg-gray-100 text-gray-700'}`}>{estadoLabel[meta.estado]||meta.estado}</span>
+                  <span className="text-xs text-gray-400 bg-gray-100 rounded px-2 py-0.5 flex-shrink-0">{totalAv} avance{totalAv!==1?'s':''} · {rows.length} contratista{rows.length!==1?'s':''}</span>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="min-w-full text-xs border border-gray-100 rounded-lg overflow-hidden">
+                    <thead className="bg-gray-50">
+                      <tr>{['Contratista','Avances en período','Máx % reportado','Aporte acumulado','Último avance'].map(h=>(
+                        <th key={h} className="px-3 py-2 text-left font-semibold text-gray-500 uppercase tracking-wide">{h}</th>
+                      ))}</tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-50">
+                      {rows.map((r,i)=>(
+                        <tr key={i} className="hover:bg-primary-50/30">
+                          <td className="px-3 py-2.5">
+                            <div className="flex items-center gap-1.5">
+                              {r.codigo&&<span className="font-mono text-xs font-bold text-green-700 bg-green-50 px-1 py-0.5 rounded border border-green-200">{r.codigo}</span>}
+                              <span className="text-gray-800 font-medium">{r.nombre}</span>
+                            </div>
+                          </td>
+                          <td className="px-3 py-2.5 text-center"><span className="font-bold text-gray-700 bg-gray-100 rounded px-2 py-0.5">{r.count}</span></td>
+                          <td className="px-3 py-2.5">
+                            <div className="flex items-center gap-2">
+                              <div className="w-16 bg-gray-200 rounded-full h-1.5"><div className={`h-1.5 rounded-full ${pctColor(r.maxPct)}`} style={{width:`${r.maxPct}%`}}/></div>
+                              <span className={`font-bold ${pctTextColor(r.maxPct)}`}>{r.maxPct}%</span>
+                            </div>
+                          </td>
+                          <td className="px-3 py-2.5 text-right"><span className="font-semibold text-indigo-700">{r.aporte>0?r.aporte.toFixed(2):'—'}</span></td>
+                          <td className="px-3 py-2.5 text-gray-500">{r.ultFecha?new Date(r.ultFecha).toLocaleDateString('es-ES'):'—'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+  );
+
   const TableAlcances = () => (
     <table className="min-w-full divide-y divide-gray-200 text-sm">
       <thead className="bg-gray-50">
@@ -396,7 +500,28 @@ const Reportes: React.FC = () => {
               </select>
             )}
 
-            <span className="ml-auto text-xs text-gray-400">{currentCount} registro{currentCount !== 1 ? 's' : ''}</span>
+            {tab === 'consolidado' && (
+              <div className="flex items-center gap-2 flex-wrap">
+                <div className="flex rounded-lg border border-gray-200 overflow-hidden text-xs font-medium">
+                  {(['mensual','trimestral','semestral'] as PeriodoTipo[]).map(t => (
+                    <button key={t} onClick={() => setPeriodoTipo(t)}
+                      className={`px-3 py-1.5 capitalize transition-colors ${ periodoTipo === t ? 'bg-primary-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50' }`}>
+                      {t}
+                    </button>
+                  ))}
+                </div>
+                <div className="flex items-center gap-1 bg-gray-100 rounded-lg px-1 py-0.5">
+                  <button onClick={prevPeriodo} className="p-1 hover:bg-white rounded text-gray-500 hover:text-gray-700"><ChevronLeft className="h-4 w-4" /></button>
+                  <div className="flex items-center gap-1.5 px-2">
+                    <CalendarDays className="h-4 w-4 text-primary-500" />
+                    <span className="text-sm font-semibold text-gray-700 min-w-max">{consolidadoPeriodo.label}</span>
+                  </div>
+                  <button onClick={nextPeriodo} className="p-1 hover:bg-white rounded text-gray-500 hover:text-gray-700"><ChevronRight className="h-4 w-4" /></button>
+                </div>
+              </div>
+            )}
+
+            <span className="ml-auto text-xs text-gray-400">{currentCount} meta{tab==='consolidado'?'s con avances':` registro${currentCount !== 1 ? 's' : ''}`}</span>
           </div>
         </div>
 
@@ -408,11 +533,14 @@ const Reportes: React.FC = () => {
             <h2 className="text-lg font-semibold text-gray-700 mt-1">
               {tab === 'avances'
                 ? `Reporte Mensual de Avances — ${mesLabel(filterMes)}`
+                : tab === 'consolidado'
+                ? `Reporte Consolidado — ${consolidadoPeriodo.label}`
                 : `Reporte: ${TABS.find(t => t.key === tab)?.label}`}
             </h2>
             <p className="text-xs text-gray-500 mt-1">
               Generado el {new Date().toLocaleDateString('es-ES', { weekday:'long', year:'numeric', month:'long', day:'numeric' })}
               {tab === 'avances' && filterMes && ` · Período: ${mesLabel(filterMes)}`}
+              {tab === 'consolidado' && ` · Período: ${consolidadoPeriodo.label}`}
               {' '}— Total: {currentCount} registro{currentCount !== 1 ? 's' : ''}
             </p>
           </div>
@@ -429,6 +557,7 @@ const Reportes: React.FC = () => {
                 {tab === 'contratistas' && <TableContratistas />}
                 {tab === 'avances'      && <TableAvances />}
                 {tab === 'alcances'     && <TableAlcances />}
+                {tab === 'consolidado'  && <SectionConsolidado />}
               </div>
             )}
           </div>
