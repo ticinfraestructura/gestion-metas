@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Target, Plus, Search, RefreshCw, AlertCircle, X, CheckCircle, TrendingUp, Users, ChevronDown, ChevronUp } from 'lucide-react';
 
 import { API_BASE as API } from '../config';
+import { apiGet, apiPost, apiPut, apiDelete } from '../utils/apiFetch';
 
 interface Meta {
   id: number;
@@ -86,6 +87,10 @@ const MetaModal: React.FC<ModalProps> = ({ meta, onClose, onSave }) => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!form.codigo.trim()) {
+      setError('El código de la meta es obligatorio');
+      return;
+    }
     if (!form.nombre.trim() || !form.descripcion.trim() || !form.fecha_limite) {
       setError('Todos los campos son obligatorios');
       return;
@@ -94,12 +99,8 @@ const MetaModal: React.FC<ModalProps> = ({ meta, onClose, onSave }) => {
     setError('');
     try {
       const url  = meta ? `${API}/metas/${meta.id}` : `${API}/metas`;
-      const method = meta ? 'PUT' : 'POST';
-      const res = await fetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
-      });
+      const fn  = meta ? apiPut : apiPost;
+      const res = await fn(url, form);
       const data = await res.json();
       if (data.success) {
         setSuccess(data.message);
@@ -140,10 +141,10 @@ const MetaModal: React.FC<ModalProps> = ({ meta, onClose, onSave }) => {
 
           <div className="grid grid-cols-3 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Código</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Código *</label>
               <input name="codigo" value={form.codigo} onChange={handleChange}
-                className="input font-mono uppercase" placeholder="AUTO" />
-              <p className="text-xs text-gray-400 mt-1">Dejar vacío para auto-generar</p>
+                className="input font-mono uppercase" placeholder="Ej: META-001" required />
+              <p className="text-xs text-gray-400 mt-1">Identificador único de la meta</p>
             </div>
             <div className="col-span-2">
               <label className="block text-sm font-medium text-gray-700 mb-1">Nombre *</label>
@@ -203,7 +204,7 @@ const ConfirmDelete: React.FC<ConfirmProps> = ({ meta, onClose, onDeleted }) => 
   const handleDelete = async () => {
     setDeleting(true);
     try {
-      const res = await fetch(`${API}/metas/${meta.id}`, { method: 'DELETE' });
+      const res = await apiDelete(`${API}/metas/${meta.id}`);
       const data = await res.json();
       if (data.success) { onDeleted(); onClose(); }
       else setError(data.message || 'Error al eliminar');
@@ -249,7 +250,7 @@ const Metas: React.FC = () => {
   const fetchMetas = async () => {
     setLoading(true); setError('');
     try {
-      const [mRes, aRes, avRes] = await Promise.all([fetch(`${API}/metas`), fetch(`${API}/alcances`), fetch(`${API}/avances`)]);
+      const [mRes, aRes, avRes] = await Promise.all([apiGet(`${API}/metas`), apiGet(`${API}/alcances`), apiGet(`${API}/avances`)]); 
       const [mData, aData, avData] = await Promise.all([mRes.json(), aRes.json(), avRes.json()]);
       if (mData.success) { const sorted = [...mData.data].sort((a, b) => new Date(b.fecha_creacion).getTime() - new Date(a.fecha_creacion).getTime()); setMetas(sorted); setFiltered(sorted); }
       else setError('Error al cargar las metas');

@@ -3,42 +3,36 @@ import {
   UserCog, Plus, Search, RefreshCw, AlertCircle, X,
   CheckCircle, Eye, EyeOff, Shield, User as UserIcon,
   Phone, Mail, Calendar, Pencil, Trash2, ToggleLeft, ToggleRight,
+  Briefcase,
 } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
-
 import { API_BASE as API } from '../config';
+import { apiGet, apiPost, apiPut, apiDelete } from '../utils/apiFetch';
 
 interface Usuario {
-  id: number;
-  nombre: string;
-  email: string;
-  rol: 'ADMIN' | 'USUARIO';
-  estado: 'ACTIVO' | 'INACTIVO';
-  telefono: string;
+  id: number; nombre: string; email: string;
+  rol: 'ADMIN' | 'CONTRATISTA';
+  estado: 'ACTIVO' | 'INACTIVO'; telefono: string;
+  contratistaId?: number | null;
+  contratista?: { id: number; nombre: string; codigo?: string; identificacion?: string; contacto?: string } | null;
   fechaCreacion: string;
 }
-
 const ROLES = [
-  { value: 'USUARIO', label: 'Usuario' },
-  { value: 'ADMIN',   label: 'Administrador' },
+  { value: 'ADMIN',       label: 'Administrador', desc: 'Acceso total al sistema' },
+  { value: 'CONTRATISTA', label: 'Contratista',   desc: 'Solo reporta avances de sus metas asignadas' },
 ];
-
 const ESTADOS = [
   { value: 'ACTIVO',   label: 'Activo' },
   { value: 'INACTIVO', label: 'Inactivo' },
 ];
-
 const rolColor: Record<string, string> = {
-  ADMIN:   'bg-purple-100 text-purple-800 border-purple-200',
-  USUARIO: 'bg-blue-100 text-blue-800 border-blue-200',
+  ADMIN:       'bg-purple-100 text-purple-800 border-purple-200',
+  CONTRATISTA: 'bg-green-100 text-green-800 border-green-200',
 };
-
 const estadoColor: Record<string, string> = {
-  ACTIVO:   'bg-green-100 text-green-800',
-  INACTIVO: 'bg-red-100 text-red-800',
+  ACTIVO: 'bg-green-100 text-green-800', INACTIVO: 'bg-red-100 text-red-800',
 };
-
-const EMPTY_FORM = { nombre: '', email: '', password: '', rol: 'USUARIO' as const, estado: 'ACTIVO' as const, telefono: '' };
+const EMPTY_FORM = { nombre: '', email: '', password: '', rol: 'ADMIN' as const, estado: 'ACTIVO' as const, telefono: '', codigo: '', identificacion: '', contacto: '' };
 
 /* ───── Modal Crear / Editar ───── */
 interface ModalProps {
@@ -51,7 +45,13 @@ interface ModalProps {
 const UsuarioModal: React.FC<ModalProps> = ({ usuario, onClose, onSave, currentUserId }) => {
   const [form, setForm] = useState(
     usuario
-      ? { nombre: usuario.nombre, email: usuario.email, password: '', rol: usuario.rol, estado: usuario.estado, telefono: usuario.telefono || '' }
+      ? {
+          nombre: usuario.nombre, email: usuario.email, password: '',
+          rol: usuario.rol, estado: usuario.estado, telefono: usuario.telefono || '',
+          codigo: usuario.contratista?.codigo || '',
+          identificacion: usuario.contratista?.identificacion || '',
+          contacto: usuario.contratista?.contacto || '',
+        }
       : { ...EMPTY_FORM }
   );
   const [showPwd, setShowPwd] = useState(false);
@@ -60,7 +60,12 @@ const UsuarioModal: React.FC<ModalProps> = ({ usuario, onClose, onSave, currentU
   const [success, setSuccess] = useState('');
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    setForm(prev => ({ ...prev, [e.target.name]: e.target.value }));
+    const { name, value } = e.target;
+    setForm(prev => ({
+      ...prev,
+      [name]: value,
+      ...(name === 'rol' && value !== 'CONTRATISTA' ? { codigo: '', identificacion: '', contacto: '' } : {}),
+    }));
     setError('');
   };
 
@@ -71,17 +76,21 @@ const UsuarioModal: React.FC<ModalProps> = ({ usuario, onClose, onSave, currentU
 
     setSaving(true); setError('');
     try {
-      const body: any = { nombre: form.nombre, email: form.email, rol: form.rol, estado: form.estado, telefono: form.telefono };
+      const body: any = {
+        nombre: form.nombre, email: form.email, rol: form.rol,
+        estado: form.estado, telefono: form.telefono,
+        codigo: form.codigo, identificacion: form.identificacion, contacto: form.contacto,
+      };
       if (form.password.trim()) body.password = form.password;
 
-      const url    = usuario ? `${API}/users/${usuario.id}` : `${API}/users`;
-      const method = usuario ? 'PUT' : 'POST';
-      const res  = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      const fn  = usuario ? apiPut : apiPost;
+      const url = usuario ? `${API}/users/${usuario.id}` : `${API}/users`;
+      const res  = await fn(url, body);
       const data = await res.json();
 
       if (data.success) {
         setSuccess(data.message);
-        setTimeout(() => { onSave(); onClose(); }, 800);
+        setTimeout(() => { onSave(); onClose(); }, 700);
       } else {
         setError(data.message || 'Error al guardar');
       }
@@ -166,6 +175,37 @@ const UsuarioModal: React.FC<ModalProps> = ({ usuario, onClose, onSave, currentU
             </div>
 
             <div className="col-span-2">
+              <p className="text-xs bg-blue-50 text-blue-700 border border-blue-100 rounded px-3 py-2">
+                <span className="font-semibold">Permisos: </span>
+                {ROLES.find(r => r.value === form.rol)?.desc}
+              </p>
+            </div>
+
+            {form.rol === 'CONTRATISTA' && (
+              <div className="col-span-2 bg-green-50 border border-green-200 rounded-lg p-3 space-y-3">
+                <p className="text-xs font-semibold text-green-700 uppercase tracking-wide">Datos del Contratista</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Código</label>
+                    <input name="codigo" value={form.codigo} onChange={handleChange}
+                      className="input" placeholder="COD-001" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Identificación / RIF</label>
+                    <input name="identificacion" value={form.identificacion} onChange={handleChange}
+                      className="input" placeholder="J-12345678-9" />
+                  </div>
+                  <div className="col-span-2">
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Contacto</label>
+                    <input name="contacto" value={form.contacto} onChange={handleChange}
+                      className="input" placeholder="Teléfono o email de contacto" />
+                  </div>
+                </div>
+                <p className="text-xs text-gray-500">Este usuario solo podrá reportar avances de sus metas asignadas.</p>
+              </div>
+            )}
+
+            <div className="col-span-2">
               <label className="block text-sm font-medium text-gray-700 mb-1">Estado</label>
               <select name="estado" value={form.estado} onChange={handleChange} className="input"
                 disabled={isEditingSelf}>
@@ -197,7 +237,7 @@ const ConfirmDelete: React.FC<DeleteProps> = ({ usuario, onClose, onDeleted }) =
   const handleDelete = async () => {
     setDeleting(true);
     try {
-      const res  = await fetch(`${API}/users/${usuario.id}`, { method: 'DELETE' });
+      const res  = await apiDelete(`${API}/users/${usuario.id}`);
       const data = await res.json();
       if (data.success) { onDeleted(); onClose(); }
       else setError(data.message || 'Error al eliminar');
@@ -227,28 +267,28 @@ const ConfirmDelete: React.FC<DeleteProps> = ({ usuario, onClose, onDeleted }) =
 /* ───── Página principal ───── */
 const Usuarios: React.FC = () => {
   const { usuario: currentUser } = useAuthStore();
-  const [usuarios, setUsuarios]     = useState<Usuario[]>([]);
-  const [filtered, setFiltered]     = useState<Usuario[]>([]);
-  const [loading, setLoading]       = useState(true);
-  const [error, setError]           = useState('');
-  const [search, setSearch]         = useState('');
-  const [filterRol, setFilterRol]   = useState('');
+  const [usuarios, setUsuarios]   = useState<Usuario[]>([]);
+  const [filtered, setFiltered]   = useState<Usuario[]>([]);
+  const [loading, setLoading]     = useState(true);
+  const [error, setError]         = useState('');
+  const [search, setSearch]       = useState('');
+  const [filterRol, setFilterRol] = useState('');
   const [filterEstado, setFilterEstado] = useState('');
-  const [modalUser, setModalUser]   = useState<Usuario | null | 'new'>(null);
+  const [modalUser, setModalUser] = useState<Usuario | null | 'new'>(null);
   const [deleteTarget, setDeleteTarget] = useState<Usuario | null>(null);
 
-  const fetchUsuarios = async () => {
+  const fetchAll = async () => {
     setLoading(true); setError('');
     try {
-      const res  = await fetch(`${API}/users`);
+      const res  = await apiGet(`${API}/users`);
       const data = await res.json();
       if (data.success) { setUsuarios(data.data); setFiltered(data.data); }
-      else setError('Error al cargar usuarios');
+      else setError(data.message || 'Error al cargar usuarios');
     } catch { setError('No se puede conectar con el servidor'); }
     finally { setLoading(false); }
   };
 
-  useEffect(() => { fetchUsuarios(); }, []);
+  useEffect(() => { fetchAll(); }, []);
 
   useEffect(() => {
     const q = search.toLowerCase();
@@ -262,19 +302,16 @@ const Usuarios: React.FC = () => {
   const toggleEstado = async (u: Usuario) => {
     const newEstado = u.estado === 'ACTIVO' ? 'INACTIVO' : 'ACTIVO';
     try {
-      const res  = await fetch(`${API}/users/${u.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ estado: newEstado }),
-      });
+      const res  = await apiPut(`${API}/users/${u.id}`, { estado: newEstado });
       const data = await res.json();
-      if (data.success) fetchUsuarios();
+      if (data.success) fetchAll();
       else setError(data.message || 'Error al cambiar estado');
     } catch { setError('No se puede conectar con el servidor'); }
   };
 
-  const activos   = usuarios.filter(u => u.estado === 'ACTIVO').length;
-  const admins    = usuarios.filter(u => u.rol === 'ADMIN').length;
+  const activos      = usuarios.filter(u => u.estado === 'ACTIVO').length;
+  const admins       = usuarios.filter(u => u.rol === 'ADMIN').length;
+  const contratistas = usuarios.filter(u => u.rol === 'CONTRATISTA').length;
 
   return (
     <div className="space-y-6">
@@ -283,7 +320,7 @@ const Usuarios: React.FC = () => {
         <UsuarioModal
           usuario={modalUser === 'new' ? null : modalUser}
           onClose={() => setModalUser(null)}
-          onSave={fetchUsuarios}
+          onSave={fetchAll}
           currentUserId={currentUser?.id ?? -1}
         />
       )}
@@ -291,7 +328,7 @@ const Usuarios: React.FC = () => {
         <ConfirmDelete
           usuario={deleteTarget}
           onClose={() => setDeleteTarget(null)}
-          onDeleted={fetchUsuarios}
+          onDeleted={fetchAll}
         />
       )}
 
@@ -299,10 +336,10 @@ const Usuarios: React.FC = () => {
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Gestión de Usuarios</h1>
-          <p className="text-gray-600">{usuarios.length} usuarios registrados · {activos} activos · {admins} administradores</p>
+          <p className="text-gray-600">{usuarios.length} usuarios · {activos} activos · {admins} admin · {contratistas} contratistas</p>
         </div>
         <div className="flex gap-2">
-          <button onClick={fetchUsuarios} className="btn-outline flex items-center gap-2">
+          <button onClick={fetchAll} className="btn-outline flex items-center gap-2">
             <RefreshCw className="h-4 w-4" />Actualizar
           </button>
           <button onClick={() => setModalUser('new')} className="btn-primary flex items-center gap-2">
@@ -318,12 +355,13 @@ const Usuarios: React.FC = () => {
       )}
 
       {/* Estadísticas rápidas */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
         {[
           { label: 'Total usuarios', value: usuarios.length, icon: UserCog, color: 'text-primary-600 bg-primary-100' },
           { label: 'Activos',        value: activos,         icon: CheckCircle, color: 'text-green-600 bg-green-100' },
           { label: 'Inactivos',      value: usuarios.length - activos, icon: X, color: 'text-red-600 bg-red-100' },
           { label: 'Administradores',value: admins,          icon: Shield, color: 'text-purple-600 bg-purple-100' },
+          { label: 'Contratistas',   value: contratistas, icon: Briefcase, color: 'text-green-600 bg-green-100' },
         ].map(stat => (
           <div key={stat.label} className="card p-4 flex items-center gap-3">
             <div className={`h-10 w-10 rounded-full flex items-center justify-center ${stat.color}`}>
@@ -368,7 +406,7 @@ const Usuarios: React.FC = () => {
                 <tr>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Usuario</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Contacto</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Rol</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Rol / Contratista</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Estado</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase flex items-center gap-1">
                     <Calendar className="h-3 w-3" />Creación
@@ -390,11 +428,11 @@ const Usuarios: React.FC = () => {
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-3">
                             <div className={`h-9 w-9 rounded-full flex items-center justify-center flex-shrink-0 ${
-                              u.rol === 'ADMIN' ? 'bg-purple-100' : 'bg-blue-100'
+                              u.rol === 'ADMIN' ? 'bg-purple-100' : 'bg-green-100'
                             }`}>
                               {u.rol === 'ADMIN'
                                 ? <Shield className="h-4 w-4 text-purple-600" />
-                                : <UserIcon className="h-4 w-4 text-blue-600" />}
+                                : <Briefcase className="h-4 w-4 text-green-600" />}
                             </div>
                             <div>
                               <p className="font-medium text-gray-900">
@@ -411,9 +449,14 @@ const Usuarios: React.FC = () => {
                         </td>
                         <td className="px-4 py-3">
                           <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold border ${rolColor[u.rol] || ''}`}>
-                            {u.rol === 'ADMIN' ? <Shield className="h-3 w-3" /> : <UserIcon className="h-3 w-3" />}
+                            {u.rol === 'ADMIN' ? <Shield className="h-3 w-3" /> : <Briefcase className="h-3 w-3" />}
                             {ROLES.find(r => r.value === u.rol)?.label || u.rol}
                           </span>
+                          {u.contratista && (
+                            <p className="text-xs text-gray-500 mt-1 flex items-center gap-1">
+                              <Briefcase className="h-3 w-3" />{u.contratista.nombre}
+                            </p>
+                          )}
                         </td>
                         <td className="px-4 py-3">
                           <span className={`px-2 py-1 rounded-full text-xs font-semibold ${estadoColor[u.estado] || ''}`}>

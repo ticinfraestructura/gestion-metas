@@ -10,11 +10,12 @@ import Avances from './pages/Avances';
 import Perfil from './pages/Perfil';
 import Reportes from './pages/Reportes';
 import Usuarios from './pages/Usuarios';
+import Actividades from './pages/Actividades';
 
 function App() {
-  const { isAuthenticated } = useAuthStore();
+  const { isAuthenticated, token } = useAuthStore();
 
-  if (!isAuthenticated) {
+  if (!isAuthenticated || !token) {
     return (
       <Router>
         <Routes>
@@ -34,6 +35,7 @@ function App() {
           <Route path="/metas" element={<Metas />} />
           <Route path="/contratistas" element={<Contratistas />} />
           <Route path="/avances" element={<Avances />} />
+          <Route path="/actividades" element={<Actividades />} />
           <Route path="/reportes" element={<Reportes />} />
           <Route path="/usuarios" element={<Usuarios />} />
           <Route path="/perfil" element={<Perfil />} />

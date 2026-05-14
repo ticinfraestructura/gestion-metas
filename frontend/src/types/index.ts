@@ -2,11 +2,15 @@ export interface Usuario {
   id: number;
   nombre: string;
   email: string;
-  rol: 'ADMIN' | 'USUARIO';
-  estado: 'PENDIENTE_VALIDACION' | 'ACTIVO' | 'INACTIVO' | 'BLOQUEADO';
-  email_validado: boolean;
-  fecha_creacion: string;
-  ultimo_login?: string;
+  rol: 'ADMIN' | 'CONTRATISTA';
+  estado: 'ACTIVO' | 'INACTIVO';
+  telefono?: string;
+  contratistaId?: number | null;
+  contratista?: { id: number; nombre: string; codigo?: string; identificacion?: string; contacto?: string } | null;
+  codigo?: string;
+  identificacion?: string;
+  contacto?: string;
+  fechaCreacion?: string;
 }
 
 export interface Meta {

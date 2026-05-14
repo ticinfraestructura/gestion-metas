@@ -3,7 +3,10 @@ const cors     = require('cors');
 const multer   = require('multer');
 const path     = require('path');
 const fs       = require('fs');
+const jwt      = require('jsonwebtoken');
 const { PrismaClient } = require('@prisma/client');
+
+const JWT_SECRET = process.env.JWT_SECRET || 'gestion-metas-secret-2026';
 
 const app    = express();
 const prisma = new PrismaClient();
@@ -45,29 +48,77 @@ app.get('/health', (req, res) =>
 app.post('/api/auth/login', async (req, res) => {
   try {
     const { email, password } = req.body;
-    const user = await prisma.usuario.findUnique({ where: { email: email?.toLowerCase() } });
+    const user = await prisma.usuario.findUnique({
+      where: { email: email?.toLowerCase() },
+      include: { contratista: { select: { id: true, nombre: true, codigo: true } } },
+    });
     if (!user || user.password !== password)
       return res.status(401).json({ success: false, message: 'Credenciales inválidas' });
     if (user.estado === 'INACTIVO')
       return res.status(403).json({ success: false, message: 'Usuario inactivo. Contacte al administrador.' });
     const { password: _, ...userSafe } = user;
+    const payload = { id: user.id, rol: user.rol, contratistaId: user.contratistaId };
+    const token        = jwt.sign(payload, JWT_SECRET, { expiresIn: '12h' });
+    const refreshToken = jwt.sign({ id: user.id }, JWT_SECRET, { expiresIn: '7d' });
     res.json({
       success: true,
       data: {
         usuario: { ...userSafe, fechaCreacion: userSafe.fechaCreacion?.toISOString().split('T')[0] },
-        token: 'jwt-token-' + Date.now(),
-        refreshToken: 'refresh-token-' + Date.now(),
+        token,
+        refreshToken,
       }
     });
   } catch (e) { res.status(500).json({ success: false, message: e.message }); }
 });
 
+app.get('/api/auth/me', authenticate, async (req, res) => {
+  try {
+    const user = await prisma.usuario.findUnique({
+      where: { id: req.user.id },
+      include: { contratista: { select: { id: true, nombre: true, codigo: true } } },
+    });
+    if (!user) return res.status(404).json({ success: false, message: 'Usuario no encontrado' });
+    const { password: _, ...safe } = user;
+    res.json({ success: true, data: { ...safe, fechaCreacion: safe.fechaCreacion?.toISOString().split('T')[0] } });
+  } catch (e) { res.status(500).json({ success: false, message: e.message }); }
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+// MIDDLEWARE AUTH
+// ═════════════════════════════════════════════════════════════════════════════
+async function authenticate(req, res, next) {
+  const header = req.headers['authorization'];
+  const token  = header && header.startsWith('Bearer ') ? header.slice(7) : null;
+  if (!token) return res.status(401).json({ success: false, message: 'Token requerido' });
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    const exists = await prisma.usuario.findUnique({ where: { id: decoded.id }, select: { id: true } });
+    if (!exists) return res.status(401).json({ success: false, message: 'Sesión expirada. Por favor inicia sesión nuevamente.' });
+    req.user = decoded;
+    next();
+  } catch {
+    res.status(401).json({ success: false, message: 'Token inválido o expirado' });
+  }
+}
+function requireAdmin(req, res, next) {
+  if (req.user?.rol !== 'ADMIN') return res.status(403).json({ success: false, message: 'Requiere rol ADMIN' });
+  next();
+}
+function requireAdminOrSupervisor(req, res, next) {
+  if (!['ADMIN','SUPERVISOR'].includes(req.user?.rol))
+    return res.status(403).json({ success: false, message: 'Requiere rol ADMIN o SUPERVISOR' });
+  next();
+}
+
 // ═════════════════════════════════════════════════════════════════════════════
 // USUARIOS
 // ═════════════════════════════════════════════════════════════════════════════
-app.get('/api/users', async (req, res) => {
+app.get('/api/users', authenticate, requireAdmin, async (req, res) => {
   try {
-    const rows = await prisma.usuario.findMany({ orderBy: { id: 'asc' } });
+    const rows = await prisma.usuario.findMany({
+      orderBy: { id: 'asc' },
+      include: { contratista: { select: { id: true, nombre: true, codigo: true } } },
+    });
     const data = rows.map(({ password: _, ...u }) => ({
       ...u, fechaCreacion: u.fechaCreacion?.toISOString().split('T')[0]
     }));
@@ -75,44 +126,88 @@ app.get('/api/users', async (req, res) => {
   } catch (e) { res.status(500).json({ success: false, message: e.message }); }
 });
 
-app.get('/api/users/:id', async (req, res) => {
+app.get('/api/users/:id', authenticate, requireAdmin, async (req, res) => {
   try {
-    const user = await prisma.usuario.findUnique({ where: { id: parseInt(req.params.id) } });
+    const user = await prisma.usuario.findUnique({
+      where: { id: parseInt(req.params.id) },
+      include: { contratista: { select: { id: true, nombre: true, codigo: true } } },
+    });
     if (!user) return res.status(404).json({ success: false, message: 'Usuario no encontrado' });
     const { password: _, ...userSafe } = user;
     res.json({ success: true, data: { ...userSafe, fechaCreacion: userSafe.fechaCreacion?.toISOString().split('T')[0] } });
   } catch (e) { res.status(500).json({ success: false, message: e.message }); }
 });
 
-app.post('/api/users', async (req, res) => {
+app.post('/api/users', authenticate, requireAdmin, async (req, res) => {
   try {
-    const { nombre, email, password, rol, estado, telefono } = req.body;
+    const { nombre, email, password, rol, estado, telefono, codigo, identificacion, contacto } = req.body;
     if (!nombre?.trim() || !email?.trim() || !password?.trim())
       return res.status(400).json({ success: false, message: 'Nombre, email y contraseña son obligatorios' });
     const exists = await prisma.usuario.findUnique({ where: { email: email.trim().toLowerCase() } });
     if (exists) return res.status(400).json({ success: false, message: 'El email ya está registrado' });
+    let contratistaId = null;
+    if (rol === 'CONTRATISTA') {
+      const contratista = await prisma.contratista.create({
+        data: {
+          nombre: nombre.trim(),
+          codigo: codigo?.trim() || '',
+          identificacion: identificacion?.trim() || '',
+          contacto: contacto?.trim() || '',
+          estado: estado || 'ACTIVO',
+        },
+      });
+      contratistaId = contratista.id;
+    }
     const user = await prisma.usuario.create({
       data: {
         nombre: nombre.trim(),
         email: email.trim().toLowerCase(),
         password: password.trim(),
-        rol: rol || 'USUARIO',
+        rol: rol || 'CONTRATISTA',
         estado: estado || 'ACTIVO',
         telefono: telefono || '',
-      }
+        contratistaId,
+      },
+      include: { contratista: { select: { id: true, nombre: true, codigo: true } } },
     });
     const { password: _, ...userSafe } = user;
     res.json({ success: true, message: 'Usuario creado exitosamente', data: { ...userSafe, fechaCreacion: userSafe.fechaCreacion?.toISOString().split('T')[0] } });
   } catch (e) { res.status(500).json({ success: false, message: e.message }); }
 });
 
-app.put('/api/users/:id', async (req, res) => {
+app.put('/api/users/:id', authenticate, requireAdmin, async (req, res) => {
   try {
     const id = parseInt(req.params.id);
-    const { nombre, email, password, rol, estado, telefono } = req.body;
+    const { nombre, email, password, rol, estado, telefono, codigo, identificacion, contacto } = req.body;
     if (email) {
       const dup = await prisma.usuario.findFirst({ where: { email: email.toLowerCase(), NOT: { id } } });
       if (dup) return res.status(400).json({ success: false, message: 'El email ya está en uso' });
+    }
+    const current = await prisma.usuario.findUnique({ where: { id }, select: { contratistaId: true, nombre: true } });
+    let newContratistaId = current?.contratistaId ?? null;
+    if (rol === 'CONTRATISTA') {
+      if (newContratistaId) {
+        const upd = {};
+        if (nombre)              upd.nombre        = nombre.trim();
+        if (codigo !== undefined) upd.codigo        = codigo?.trim() || '';
+        if (identificacion)      upd.identificacion = identificacion.trim();
+        if (contacto !== undefined) upd.contacto    = contacto?.trim() || '';
+        if (estado)              upd.estado         = estado;
+        await prisma.contratista.update({ where: { id: newContratistaId }, data: upd });
+      } else {
+        const c = await prisma.contratista.create({
+          data: {
+            nombre: nombre?.trim() || current?.nombre || '',
+            codigo: codigo?.trim() || '',
+            identificacion: identificacion?.trim() || '',
+            contacto: contacto?.trim() || '',
+            estado: estado || 'ACTIVO',
+          },
+        });
+        newContratistaId = c.id;
+      }
+    } else if (rol === 'ADMIN') {
+      newContratistaId = null;
     }
     const data = {};
     if (nombre)   data.nombre   = nombre.trim();
@@ -121,13 +216,17 @@ app.put('/api/users/:id', async (req, res) => {
     if (rol)      data.rol      = rol;
     if (estado)   data.estado   = estado;
     if (telefono !== undefined) data.telefono = telefono;
-    const user = await prisma.usuario.update({ where: { id }, data });
+    data.contratistaId = newContratistaId;
+    const user = await prisma.usuario.update({
+      where: { id }, data,
+      include: { contratista: { select: { id: true, nombre: true, codigo: true } } },
+    });
     const { password: _, ...userSafe } = user;
     res.json({ success: true, message: 'Usuario actualizado exitosamente', data: { ...userSafe, fechaCreacion: userSafe.fechaCreacion?.toISOString().split('T')[0] } });
   } catch (e) { res.status(500).json({ success: false, message: e.message }); }
 });
 
-app.delete('/api/users/:id', async (req, res) => {
+app.delete('/api/users/:id', authenticate, requireAdmin, async (req, res) => {
   try {
     const id = parseInt(req.params.id);
     if (id === 1) return res.status(400).json({ success: false, message: 'No se puede eliminar al administrador principal' });
@@ -171,38 +270,22 @@ const formatMeta = async (m) => ({
 });
 
 // ═════════════════════════════════════════════════════════════════════════════
-// DASHBOARD
-// ═════════════════════════════════════════════════════════════════════════════
-app.get('/api/dashboard/stats', async (req, res) => {
-  try {
-    const [totalMetas, metasCompletadas, metasEnProgreso, totalContratistas, totalAvances, totalAlcances, metas] =
-      await Promise.all([
-        prisma.meta.count(),
-        prisma.meta.count({ where: { estado: 'COMPLETADA' } }),
-        prisma.meta.count({ where: { estado: 'EN_PROGRESO' } }),
-        prisma.contratista.count(),
-        prisma.avance.count(),
-        prisma.alcance.count(),
-        prisma.meta.findMany({ select: { id: true } }),
-      ]);
-    const pcts = await Promise.all(metas.map(m => calcPorcentajeMeta(m.id)));
-    const promedioCompletacion = pcts.length ? Math.round(pcts.reduce((s, p) => s + p, 0) / pcts.length) : 0;
-    res.json({ success: true, data: { totalMetas, metasCompletadas, metasEnProgreso, totalContratistas, totalAvances, totalAlcances, promedioCompletacion } });
-  } catch (e) { res.status(500).json({ success: false, message: e.message }); }
-});
-
-// ═════════════════════════════════════════════════════════════════════════════
 // METAS
 // ═════════════════════════════════════════════════════════════════════════════
-app.get('/api/metas', async (req, res) => {
+app.get('/api/metas', authenticate, async (req, res) => {
   try {
-    const rows = await prisma.meta.findMany({ include: { creador: true }, orderBy: { id: 'asc' } });
+    let where = {};
+    if (req.user.rol === 'CONTRATISTA' && req.user.contratistaId) {
+      const alcances = await prisma.alcance.findMany({ where: { contratistaId: req.user.contratistaId }, select: { metaId: true } });
+      where = { id: { in: alcances.map(a => a.metaId) } };
+    }
+    const rows = await prisma.meta.findMany({ where, include: { creador: true }, orderBy: { id: 'asc' } });
     const data = await Promise.all(rows.map(formatMeta));
     res.json({ success: true, data });
   } catch (e) { res.status(500).json({ success: false, message: e.message }); }
 });
 
-app.get('/api/metas/:id', async (req, res) => {
+app.get('/api/metas/:id', authenticate, async (req, res) => {
   try {
     const meta = await prisma.meta.findUnique({ where: { id: parseInt(req.params.id) }, include: { creador: true } });
     if (!meta) return res.status(404).json({ success: false, message: 'Meta no encontrada' });
@@ -210,26 +293,26 @@ app.get('/api/metas/:id', async (req, res) => {
   } catch (e) { res.status(500).json({ success: false, message: e.message }); }
 });
 
-app.post('/api/metas', async (req, res) => {
+app.post('/api/metas', authenticate, requireAdmin, async (req, res) => {
   try {
     const { nombre, descripcion, estado, fecha_limite, codigo, unidades } = req.body;
+    if (!codigo?.trim())
+      return res.status(400).json({ success: false, message: 'El código de la meta es obligatorio' });
     if (!nombre || !descripcion || !estado || !fecha_limite)
       return res.status(400).json({ success: false, message: 'Todos los campos son requeridos' });
-    const count     = await prisma.meta.count();
-    const autoCode  = `META-${String(count + 1).padStart(3, '0')}`;
-    const codigoFinal = codigo?.trim() ? codigo.trim().toUpperCase() : autoCode;
+    const codigoFinal = codigo.trim().toUpperCase();
     const dup = await prisma.meta.findUnique({ where: { codigo: codigoFinal } });
     if (dup) return res.status(400).json({ success: false, message: `El código '${codigoFinal}' ya está en uso.` });
     const unidadesVal = unidades !== undefined && unidades !== '' ? Math.round(parseFloat(unidades) * 100) / 100 : null;
     const meta = await prisma.meta.create({
-      data: { codigo: codigoFinal, nombre, descripcion, estado, fecha_limite, unidades: unidadesVal, creador_id: 1 },
+      data: { codigo: codigoFinal, nombre, descripcion, estado, fecha_limite, unidades: unidadesVal, creador_id: req.user.id },
       include: { creador: true },
     });
     res.status(201).json({ success: true, data: await formatMeta(meta), message: 'Meta creada exitosamente' });
   } catch (e) { res.status(500).json({ success: false, message: e.message }); }
 });
 
-app.put('/api/metas/:id', async (req, res) => {
+app.put('/api/metas/:id', authenticate, requireAdmin, async (req, res) => {
   try {
     const id = parseInt(req.params.id);
     const { nombre, descripcion, estado, fecha_limite, codigo, unidades } = req.body;
@@ -249,7 +332,7 @@ app.put('/api/metas/:id', async (req, res) => {
   } catch (e) { res.status(500).json({ success: false, message: e.message }); }
 });
 
-app.delete('/api/metas/:id', async (req, res) => {
+app.delete('/api/metas/:id', authenticate, requireAdmin, async (req, res) => {
   try {
     await prisma.meta.delete({ where: { id: parseInt(req.params.id) } });
     res.json({ success: true, message: 'Meta eliminada exitosamente' });
@@ -259,14 +342,14 @@ app.delete('/api/metas/:id', async (req, res) => {
 // ═════════════════════════════════════════════════════════════════════════════
 // CONTRATISTAS
 // ═════════════════════════════════════════════════════════════════════════════
-app.get('/api/contratistas', async (req, res) => {
+app.get('/api/contratistas', authenticate, async (req, res) => {
   try {
     const data = await prisma.contratista.findMany({ orderBy: { id: 'asc' } });
     res.json({ success: true, data });
   } catch (e) { res.status(500).json({ success: false, message: e.message }); }
 });
 
-app.get('/api/contratistas/:id', async (req, res) => {
+app.get('/api/contratistas/:id', authenticate, async (req, res) => {
   try {
     const c = await prisma.contratista.findUnique({ where: { id: parseInt(req.params.id) } });
     if (!c) return res.status(404).json({ success: false, message: 'Contratista no encontrado' });
@@ -274,7 +357,7 @@ app.get('/api/contratistas/:id', async (req, res) => {
   } catch (e) { res.status(500).json({ success: false, message: e.message }); }
 });
 
-app.post('/api/contratistas', async (req, res) => {
+app.post('/api/contratistas', authenticate, requireAdmin, async (req, res) => {
   try {
     const { nombre, identificacion, contacto, telefono, estado, codigo } = req.body;
     if (!nombre || !identificacion || !contacto)
@@ -291,7 +374,7 @@ app.post('/api/contratistas', async (req, res) => {
   } catch (e) { res.status(500).json({ success: false, message: e.message }); }
 });
 
-app.put('/api/contratistas/:id', async (req, res) => {
+app.put('/api/contratistas/:id', authenticate, requireAdmin, async (req, res) => {
   try {
     const id = parseInt(req.params.id);
     const { nombre, identificacion, contacto, telefono, estado, codigo } = req.body;
@@ -309,7 +392,7 @@ app.put('/api/contratistas/:id', async (req, res) => {
   } catch (e) { res.status(500).json({ success: false, message: e.message }); }
 });
 
-app.delete('/api/contratistas/:id', async (req, res) => {
+app.delete('/api/contratistas/:id', authenticate, requireAdmin, async (req, res) => {
   try {
     await prisma.contratista.delete({ where: { id: parseInt(req.params.id) } });
     res.json({ success: true, message: 'Contratista eliminado exitosamente' });
@@ -321,14 +404,17 @@ app.delete('/api/contratistas/:id', async (req, res) => {
 // ═════════════════════════════════════════════════════════════════════════════
 const includeAlcance = { contratista: true, meta: true };
 
-app.get('/api/alcances', async (req, res) => {
+app.get('/api/alcances', authenticate, async (req, res) => {
   try {
-    const data = await prisma.alcance.findMany({ include: includeAlcance, orderBy: { id: 'asc' } });
+    let where = {};
+    if (req.user.rol === 'CONTRATISTA' && req.user.contratistaId)
+      where = { contratistaId: req.user.contratistaId };
+    const data = await prisma.alcance.findMany({ where, include: includeAlcance, orderBy: { id: 'asc' } });
     res.json({ success: true, data });
   } catch (e) { res.status(500).json({ success: false, message: e.message }); }
 });
 
-app.get('/api/alcances/contratista/:id', async (req, res) => {
+app.get('/api/alcances/contratista/:id', authenticate, async (req, res) => {
   try {
     const data = await prisma.alcance.findMany({
       where: { contratistaId: parseInt(req.params.id) },
@@ -338,7 +424,7 @@ app.get('/api/alcances/contratista/:id', async (req, res) => {
   } catch (e) { res.status(500).json({ success: false, message: e.message }); }
 });
 
-app.post('/api/alcances', async (req, res) => {
+app.post('/api/alcances', authenticate, requireAdmin, async (req, res) => {
   try {
     const { contratistaId, metaId, descripcion, fecha_inicio, fecha_fin, periodicidad, porcentaje_asignado } = req.body;
     if (!contratistaId || !metaId || !descripcion || !fecha_inicio || !fecha_fin || !periodicidad)
@@ -355,7 +441,7 @@ app.post('/api/alcances', async (req, res) => {
   } catch (e) { res.status(500).json({ success: false, message: e.message }); }
 });
 
-app.put('/api/alcances/:id', async (req, res) => {
+app.put('/api/alcances/:id', authenticate, requireAdmin, async (req, res) => {
   try {
     const { contratistaId, metaId, descripcion, fecha_inicio, fecha_fin, periodicidad, porcentaje_asignado } = req.body;
     const updated = await prisma.alcance.update({
@@ -371,7 +457,7 @@ app.put('/api/alcances/:id', async (req, res) => {
   } catch (e) { res.status(500).json({ success: false, message: e.message }); }
 });
 
-app.delete('/api/alcances/:id', async (req, res) => {
+app.delete('/api/alcances/:id', authenticate, requireAdmin, async (req, res) => {
   try {
     await prisma.alcance.delete({ where: { id: parseInt(req.params.id) } });
     res.json({ success: true, message: 'Alcance eliminado exitosamente' });
@@ -385,16 +471,20 @@ const includeAvance = {
   meta:        { select: { nombre: true, codigo: true } },
   contratista: { select: { nombre: true, codigo: true } },
   reportadoPor:{ select: { nombre: true } },
+  alcance:     { select: { id: true, descripcion: true } },
 };
 
-app.get('/api/avances', async (req, res) => {
+app.get('/api/avances', authenticate, async (req, res) => {
   try {
-    const data = await prisma.avance.findMany({ include: includeAvance, orderBy: { id: 'asc' } });
+    let where = {};
+    if (req.user.rol === 'CONTRATISTA' && req.user.contratistaId)
+      where = { contratistaId: req.user.contratistaId };
+    const data = await prisma.avance.findMany({ where, include: includeAvance, orderBy: { id: 'asc' } });
     res.json({ success: true, data });
   } catch (e) { res.status(500).json({ success: false, message: e.message }); }
 });
 
-app.get('/api/avances/:id', async (req, res) => {
+app.get('/api/avances/:id', authenticate, async (req, res) => {
   try {
     const a = await prisma.avance.findUnique({ where: { id: parseInt(req.params.id) }, include: includeAvance });
     if (!a) return res.status(404).json({ success: false, message: 'Avance no encontrado' });
@@ -402,23 +492,40 @@ app.get('/api/avances/:id', async (req, res) => {
   } catch (e) { res.status(500).json({ success: false, message: e.message }); }
 });
 
-app.post('/api/avances', async (req, res) => {
+app.post('/api/avances', authenticate, async (req, res) => {
   try {
-    const { descripcion, numavance, fecha_presentacion, metaId, contratistaId, alcanceId, porcentaje_avance, reg_imagen, aporte_meta } = req.body;
-    if (!descripcion || !numavance || !fecha_presentacion || !metaId || !contratistaId)
-      return res.status(400).json({ success: false, message: 'Descripción, número, fecha, meta y contratista son requeridos' });
+    const { descripcion, fecha_presentacion, metaId, contratistaId, alcanceId, porcentaje_avance, reg_imagen, aporte_meta } = req.body;
+    if (!descripcion || !fecha_presentacion || !metaId || !contratistaId)
+      return res.status(400).json({ success: false, message: 'Descripción, fecha, meta y contratista son requeridos' });
+    // CONTRATISTA solo puede reportar avances de sus propias metas
+    let resolvedContratistaId = parseInt(contratistaId);
+    if (req.user.rol === 'CONTRATISTA') {
+      const cid = req.user.contratistaId;
+      if (!cid) return res.status(403).json({ success: false, message: 'Tu usuario no tiene un contratista vinculado' });
+      resolvedContratistaId = cid; // siempre forzar el propio contratista
+      const alcance = await prisma.alcance.findFirst({ where: { contratistaId: cid, metaId: parseInt(metaId) } });
+      if (!alcance)
+        return res.status(403).json({ success: false, message: 'No tienes un alcance asignado para esta meta' });
+    }
+    // Auto-numerar: MAX(numavance) por contratista + 1
+    const lastAvance = await prisma.avance.findFirst({
+      where: { contratistaId: resolvedContratistaId },
+      orderBy: { numavance: 'desc' },
+      select: { numavance: true },
+    });
+    const nextNum = (lastAvance?.numavance ?? 0) + 1;
     const aporte = aporte_meta !== undefined && aporte_meta !== '' ? Math.round(parseFloat(aporte_meta) * 100) / 100 : null;
     const nuevo = await prisma.avance.create({
       data: {
-        numavance: parseInt(numavance),
+        numavance: nextNum,
         descripcion, fecha_presentacion,
         porcentaje_avance: parseFloat(porcentaje_avance) || 0,
         aporte_meta: aporte,
         reg_imagen: reg_imagen || '',
         metaId: parseInt(metaId),
-        contratistaId: parseInt(contratistaId),
+        contratistaId: resolvedContratistaId,
         alcanceId: alcanceId ? parseInt(alcanceId) : null,
-        reportado_por_id: 1,
+        reportado_por_id: req.user.id,
       },
       include: includeAvance,
     });
@@ -426,17 +533,32 @@ app.post('/api/avances', async (req, res) => {
   } catch (e) { res.status(500).json({ success: false, message: e.message }); }
 });
 
-app.put('/api/avances/:id', async (req, res) => {
+app.put('/api/avances/:id', authenticate, async (req, res) => {
   try {
     const { descripcion, numavance, fecha_presentacion, metaId, contratistaId, alcanceId, porcentaje_avance, reg_imagen, aporte_meta } = req.body;
+    const avanceId = parseInt(req.params.id);
+    let resolvedContratistaId = parseInt(contratistaId);
+    if (req.user.rol === 'CONTRATISTA') {
+      const cid = req.user.contratistaId;
+      if (!cid) return res.status(403).json({ success: false, message: 'Tu usuario no tiene un contratista vinculado' });
+      // Verificar que el avance pertenece a su propio contratista
+      const existing = await prisma.avance.findUnique({ where: { id: avanceId }, select: { contratistaId: true } });
+      if (!existing || existing.contratistaId !== cid)
+        return res.status(403).json({ success: false, message: 'No puedes editar avances de otro contratista' });
+      resolvedContratistaId = cid;
+    }
     const aporte = aporte_meta !== undefined && aporte_meta !== '' ? Math.round(parseFloat(aporte_meta) * 100) / 100 : null;
+    // CONTRATISTA no puede modificar el porcentaje — se conserva el valor existente
+    const pctData = req.user.rol === 'CONTRATISTA'
+      ? {}
+      : { porcentaje_avance: parseFloat(porcentaje_avance) || 0 };
     const updated = await prisma.avance.update({
-      where: { id: parseInt(req.params.id) },
+      where: { id: avanceId },
       data: {
-        numavance: parseInt(numavance), descripcion, fecha_presentacion,
-        porcentaje_avance: parseFloat(porcentaje_avance) || 0,
+        descripcion, fecha_presentacion,
+        ...pctData,
         aporte_meta: aporte,
-        metaId: parseInt(metaId), contratistaId: parseInt(contratistaId),
+        metaId: parseInt(metaId), contratistaId: resolvedContratistaId,
         alcanceId: alcanceId ? parseInt(alcanceId) : null,
         ...(reg_imagen !== undefined && { reg_imagen }),
       },
@@ -446,7 +568,7 @@ app.put('/api/avances/:id', async (req, res) => {
   } catch (e) { res.status(500).json({ success: false, message: e.message }); }
 });
 
-app.delete('/api/avances/:id', async (req, res) => {
+app.delete('/api/avances/:id', authenticate, requireAdmin, async (req, res) => {
   try {
     await prisma.avance.delete({ where: { id: parseInt(req.params.id) } });
     res.json({ success: true, message: 'Avance eliminado exitosamente' });
@@ -456,7 +578,25 @@ app.delete('/api/avances/:id', async (req, res) => {
 // ═════════════════════════════════════════════════════════════════════════════
 // UPLOAD
 // ═════════════════════════════════════════════════════════════════════════════
-app.post('/api/upload', upload.single('archivo'), (req, res) => {
+app.get('/api/dashboard/stats', authenticate, async (req, res) => {
+  try {
+    const [totalMetas, metasCompletadas, metasEnProgreso, totalContratistas, totalAvances, totalAlcances, metas] =
+      await Promise.all([
+        prisma.meta.count(),
+        prisma.meta.count({ where: { estado: 'COMPLETADA' } }),
+        prisma.meta.count({ where: { estado: 'EN_PROGRESO' } }),
+        prisma.contratista.count(),
+        prisma.avance.count(),
+        prisma.alcance.count(),
+        prisma.meta.findMany({ select: { id: true } }),
+      ]);
+    const pcts = await Promise.all(metas.map(m => calcPorcentajeMeta(m.id)));
+    const promedioCompletacion = pcts.length ? Math.round(pcts.reduce((s, p) => s + p, 0) / pcts.length) : 0;
+    res.json({ success: true, data: { totalMetas, metasCompletadas, metasEnProgreso, totalContratistas, totalAvances, totalAlcances, promedioCompletacion } });
+  } catch (e) { res.status(500).json({ success: false, message: e.message }); }
+});
+
+app.post('/api/upload', authenticate, upload.single('archivo'), (req, res) => {
   if (!req.file) return res.status(400).json({ success: false, message: 'No se recibió ningún archivo' });
   const url = `${process.env.BACKEND_URL || 'http://localhost:' + PORT}/uploads/${req.file.filename}`;
   res.json({ success: true, data: { filename: req.file.filename, originalname: req.file.originalname, url, size: req.file.size }, message: 'Archivo subido exitosamente' });

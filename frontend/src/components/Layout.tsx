@@ -10,7 +10,8 @@ import {
   Menu,
   X,
   FileText,
-  UserCog
+  UserCog,
+  ClipboardList
 } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 
@@ -25,17 +26,18 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     navigate('/login');
   };
 
-  const isAdmin = usuario?.rol === 'ADMIN';
+  const isAdmin       = usuario?.rol === 'ADMIN';
+  const isContratista = usuario?.rol === 'CONTRATISTA';
 
   const navigation = [
-    { name: 'Dashboard',   href: '/dashboard',   icon: Home },
-    { name: 'Metas',       href: '/metas',       icon: Target },
-    { name: 'Contratistas',href: '/contratistas',icon: Users },
-    { name: 'Avances',     href: '/avances',     icon: TrendingUp },
-    { name: 'Reportes',    href: '/reportes',    icon: FileText },
-    ...(isAdmin ? [{ name: 'Usuarios', href: '/usuarios', icon: UserCog }] : []),
-    { name: 'Perfil',      href: '/perfil',      icon: User },
-  ];
+    { name: 'Dashboard',   href: '/dashboard',   icon: Home,          show: true },
+    { name: 'Metas',       href: '/metas',       icon: Target,        show: isAdmin },
+    { name: 'Actividades', href: '/actividades', icon: ClipboardList, show: isAdmin },
+    { name: 'Avances',     href: '/avances',     icon: TrendingUp,    show: true },
+    { name: 'Reportes',    href: '/reportes',    icon: FileText,      show: isAdmin },
+    { name: 'Usuarios',    href: '/usuarios',    icon: UserCog,       show: isAdmin },
+    { name: 'Perfil',      href: '/perfil',      icon: User,          show: true },
+  ].filter(n => n.show);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -169,7 +171,9 @@ const Sidebar: React.FC<{
           </div>
           <div className="ml-3">
             <p className="text-sm font-medium text-gray-700">{usuario?.nombre}</p>
-            <p className="text-xs text-gray-500">{usuario?.rol}</p>
+            <span className={`text-xs font-semibold px-1.5 py-0.5 rounded ${
+              usuario?.rol === 'ADMIN' ? 'bg-purple-100 text-purple-700' : 'bg-green-100 text-green-700'
+            }`}>{usuario?.rol === 'ADMIN' ? 'Admin' : 'Contratista'}</span>
           </div>
         </div>
         <button

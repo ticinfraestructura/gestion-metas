@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { FileText, Printer, RefreshCw, Search, X, CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react';
 
 import { API_BASE as API } from '../config';
+import { apiGet } from '../utils/apiFetch';
 
 /* ─── Interfaces ─── */
 interface Meta     { id: number; codigo: string; nombre: string; descripcion: string; estado: string; fecha_limite: string; porcentaje_completacion?: number; creador?: { nombre: string }; }
@@ -96,8 +97,8 @@ const Reportes: React.FC = () => {
     setLoading(true);
     try {
       const [mr, cr, ar, alr] = await Promise.all([
-        fetch(`${API}/metas`), fetch(`${API}/contratistas`),
-        fetch(`${API}/avances`), fetch(`${API}/alcances`),
+        apiGet(`${API}/metas`), apiGet(`${API}/contratistas`),
+        apiGet(`${API}/avances`), apiGet(`${API}/alcances`),
       ]);
       const [md, cd, ad, ald] = await Promise.all([mr.json(), cr.json(), ar.json(), alr.json()]);
       if (md.success)  setMetas(md.data);

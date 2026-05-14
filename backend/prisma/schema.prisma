@@ -9,19 +9,22 @@ datasource db {
 }
 
 model Usuario {
-  id             Int      @id @default(autoincrement())
-  nombre         String   @db.VarChar(200)
-  email          String   @unique @db.VarChar(200)
-  password       String   @db.VarChar(255)
-  rol            String   @default("USUARIO") @db.VarChar(20)
-  estado         String   @default("ACTIVO") @db.VarChar(20)
-  telefono       String?  @db.VarChar(50)
-  fechaCreacion  DateTime @default(now()) @map("fecha_creacion")
+  id              Int          @id @default(autoincrement())
+  nombre          String       @db.VarChar(200)
+  email           String       @unique @db.VarChar(200)
+  password        String       @db.VarChar(255)
+  rol             String       @default("CONTRATISTA") @db.VarChar(20)
+  estado          String       @default("ACTIVO") @db.VarChar(20)
+  telefono        String?      @db.VarChar(50)
+  contratistaId   Int?         @map("contratista_id")
+  fechaCreacion   DateTime     @default(now()) @map("fecha_creacion")
 
-  metas_creadas  Meta[]   @relation("UsuarioMetas")
-  avances        Avance[] @relation("UsuarioAvances")
+  contratista    Contratista? @relation("UsuarioContratista", fields: [contratistaId], references: [id], onDelete: SetNull)
+  metas_creadas  Meta[]       @relation("UsuarioMetas")
+  avances        Avance[]     @relation("UsuarioAvances")
 
   @@index([email])
+  @@index([contratistaId])
   @@map("usuarios")
 }
 
@@ -55,8 +58,9 @@ model Contratista {
   fecha_creacion      DateTime @default(now())
   fecha_actualizacion DateTime @updatedAt
 
-  avances  Avance[]
-  alcances Alcance[]
+  avances   Avance[]
+  alcances  Alcance[]
+  usuarios  Usuario[] @relation("UsuarioContratista")
 
   @@map("contratistas")
 }

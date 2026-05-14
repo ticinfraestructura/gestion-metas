@@ -25,11 +25,9 @@ const Perfil: React.FC = () => {
               <p className="text-sm text-gray-600">{usuario?.email}</p>
               <div className="mt-4">
                 <span className={`px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                  usuario?.rol === 'ADMIN' 
-                    ? 'bg-purple-100 text-purple-800' 
-                    : 'bg-blue-100 text-blue-800'
+                  usuario?.rol === 'ADMIN' ? 'bg-purple-100 text-purple-800' : 'bg-green-100 text-green-800'
                 }`}>
-                  {usuario?.rol === 'ADMIN' ? 'Administrador' : 'Usuario'}
+                  {usuario?.rol === 'ADMIN' ? 'Administrador' : 'Contratista'}
                 </span>
               </div>
             </div>
@@ -85,7 +83,7 @@ const Perfil: React.FC = () => {
                   <Shield className="h-4 w-4 text-gray-400 mr-2" />
                   <input
                     type="text"
-                    value={usuario?.rol === 'ADMIN' ? 'Administrador' : 'Usuario' || ''}
+                    value={usuario?.rol === 'ADMIN' ? 'Administrador' : 'Contratista'}
                     readOnly
                     className="input"
                   />
@@ -117,7 +115,7 @@ const Perfil: React.FC = () => {
                   <Calendar className="h-4 w-4 text-gray-400 mr-2" />
                   <input
                     type="text"
-                    value={usuario?.fecha_creacion ? new Date(usuario.fecha_creacion).toLocaleDateString('es-ES') : ''}
+                    value={usuario?.fechaCreacion ? new Date(usuario.fechaCreacion).toLocaleDateString('es-ES') : ''}
                     readOnly
                     className="input"
                   />
@@ -126,13 +124,13 @@ const Perfil: React.FC = () => {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Último Acceso
+                  Estado de Cuenta
                 </label>
                 <div className="flex items-center">
                   <Calendar className="h-4 w-4 text-gray-400 mr-2" />
                   <input
                     type="text"
-                    value={usuario?.ultimo_login ? new Date(usuario.ultimo_login).toLocaleDateString('es-ES') : 'Nunca'}
+                    value={usuario?.estado === 'ACTIVO' ? 'Activo' : 'Inactivo'}
                     readOnly
                     className="input"
                   />
@@ -148,9 +146,9 @@ const Perfil: React.FC = () => {
                     Validación de Email
                   </h4>
                   <p className="text-sm text-blue-700 mt-1">
-                    {usuario?.email_validado 
-                      ? 'Tu correo electrónico ha sido validado correctamente.' 
-                      : 'Tu correo electrónico aún no ha sido validado. Revisa tu bandeja de entrada.'
+                    {usuario?.estado === 'ACTIVO'
+                      ? 'Tu cuenta está activa y tu acceso está habilitado.'
+                      : 'Tu cuenta está inactiva. Contacta al administrador.'
                     }
                   </p>
                 </div>

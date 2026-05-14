@@ -1,6 +1,8 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { Plus, Search, Calendar, FileText, RefreshCw, AlertCircle, X, CheckCircle, Upload, Paperclip, Trash2 } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { Plus, Search, Calendar, FileText, RefreshCw, AlertCircle, X, CheckCircle, Link as LinkIcon, ExternalLink, Trash2, User as UserIcon, Lock } from 'lucide-react';
 import { API_BASE as API_URL } from '../config';
+import { useAuthStore } from '../store/authStore';
+import { apiGet, apiPost, apiPut, apiDelete } from '../utils/apiFetch';
 
 interface Avance {
   id: number;
@@ -20,7 +22,7 @@ interface Avance {
 interface Catalogo { id: number; codigo?: string; nombre: string; }
 interface Alcance { id: number; contratistaId: number; metaId: number; descripcion: string; periodicidad: string; fecha_inicio: string; fecha_fin: string; meta?: { nombre: string }; }
 
-const EMPTY_FORM = { descripcion: '', numavance: '1', porcentaje_avance: '0', aporte_meta: '', fecha_presentacion: '', metaId: '', contratistaId: '', alcanceId: '' };
+const EMPTY_FORM = { descripcion: '', porcentaje_avance: '0', aporte_meta: '', fecha_presentacion: '', metaId: '', contratistaId: '', alcanceId: '', reg_imagen: '' };
 
 /* ───── Modal ───── */
 const AvanceModal: React.FC<{
@@ -30,92 +32,64 @@ const AvanceModal: React.FC<{
   alcances: Alcance[];
   onClose: () => void;
   onSave: () => void;
-}> = ({ avance, metas, contratistas, alcances, onClose, onSave }) => {
+  isContratista?: boolean;
+  contratistaIdLocked?: number | null;
+}> = ({ avance, metas, contratistas, alcances, onClose, onSave, isContratista, contratistaIdLocked }) => {
   const toDateInput = (iso: string) => iso ? iso.substring(0, 10) : '';
+  const lockedCid = contratistaIdLocked ? String(contratistaIdLocked) : '';
   const [form, setForm] = useState(
     avance
-      ? { descripcion: avance.descripcion, numavance: String(avance.numavance),
+      ? { descripcion: avance.descripcion,
           porcentaje_avance: String(avance.porcentaje_avance ?? 0),
           aporte_meta: avance.aporte_meta != null ? String(avance.aporte_meta) : '',
           fecha_presentacion: toDateInput(avance.fecha_presentacion),
-          metaId: String(avance.metaId || ''), contratistaId: String(avance.contratistaId || ''),
-          alcanceId: String(avance.alcanceId || '') }
-      : { ...EMPTY_FORM }
+          metaId: String(avance.metaId || ''),
+          contratistaId: lockedCid || String(avance.contratistaId || ''),
+          alcanceId: String(avance.alcanceId || ''),
+          reg_imagen: avance.reg_imagen || '' }
+      : { ...EMPTY_FORM, contratistaId: lockedCid }
   );
   const alcancesFiltrados = alcances.filter(a => String(a.contratistaId) === form.contratistaId);
-  const [saving, setSaving]       = useState(false);
-  const [error, setError]         = useState('');
-  const [success, setSuccess]     = useState('');
-  const [file, setFile]           = useState<File | null>(null);
-  const [uploading, setUploading] = useState(false);
-  const [uploadedUrl, setUploadedUrl] = useState<string>(avance?.reg_imagen || '');
-  const [preview, setPreview]     = useState<string>('');
-  const fileRef = useRef<HTMLInputElement>(null);
+  const metasDisponibles  = isContratista && lockedCid
+    ? metas.filter(m => alcances.some(a => String(a.contratistaId) === lockedCid && String(a.metaId) === String(m.id)))
+    : metas;
+  const selectedAlcance = alcances.find(a => String(a.id) === form.alcanceId);
+  const [saving, setSaving]   = useState(false);
+  const [error, setError]     = useState('');
+  const [success, setSuccess] = useState('');
 
   const change = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
-    setForm(p => ({ ...p, [e.target.name]: e.target.value })); setError('');
-  };
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const selected = e.target.files?.[0];
-    if (!selected) return;
-    if (selected.size > 10 * 1024 * 1024) { setError('El archivo supera el límite de 10 MB'); return; }
-    setFile(selected);
-    setError('');
-    if (selected.type.startsWith('image/')) {
-      const reader = new FileReader();
-      reader.onload = ev => setPreview(ev.target?.result as string);
-      reader.readAsDataURL(selected);
+    const { name, value } = e.target;
+    if (isContratista && name === 'alcanceId') {
+      const picked = alcances.find(a => String(a.id) === value);
+      setForm(p => ({ ...p, alcanceId: value, metaId: picked ? String(picked.metaId) : '' }));
     } else {
-      setPreview('');
+      setForm(p => ({ ...p, [name]: value }));
     }
+    setError('');
   };
 
-  const handleUpload = async () => {
-    if (!file) return;
-    setUploading(true); setError('');
-    try {
-      const fd = new FormData();
-      fd.append('archivo', file);
-      const res  = await fetch(`${API_URL}/upload`, { method: 'POST', body: fd });
-      const data = await res.json();
-      if (data.success) {
-        setUploadedUrl(data.data.url);
-        setSuccess(`Archivo "${data.data.originalname}" subido correctamente`);
-        setFile(null);
-        setPreview('');
-        if (fileRef.current) fileRef.current.value = '';
-      } else { setError(data.message || 'Error al subir archivo'); }
-    } catch { setError('No se puede conectar con el servidor'); }
-    finally { setUploading(false); }
-  };
-
-  const removeFile = () => {
-    setUploadedUrl(''); setFile(null); setPreview('');
-    if (fileRef.current) fileRef.current.value = '';
-  };
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.descripcion.trim() || !form.numavance || !form.fecha_presentacion || !form.metaId || !form.contratistaId) {
-      setError('Descripción, número, fecha, meta y contratista son obligatorios'); return;
+    if (!form.descripcion.trim() || !form.fecha_presentacion || !form.metaId || !form.contratistaId) {
+      setError('Descripción, fecha, meta y contratista son obligatorios'); return;
     }
-    if (file && !uploadedUrl) { setError('Tienes un archivo seleccionado sin subir. Haz clic en "Subir Archivo" primero.'); return; }
+    if (form.reg_imagen && !/^https?:\/\//i.test(form.reg_imagen)) {
+      setError('El enlace de evidencia debe comenzar con http:// o https://'); return;
+    }
     setSaving(true);
     try {
-      const payload = { ...form, reg_imagen: uploadedUrl };
-      const url    = avance ? `${API_URL}/avances/${avance.id}` : `${API_URL}/avances`;
-      const method = avance ? 'PUT' : 'POST';
-      const res  = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+      const payload = { ...form };
+      const fn  = avance ? apiPut : apiPost;
+      const url = avance ? `${API_URL}/avances/${avance.id}` : `${API_URL}/avances`;
+      const res  = await fn(url, payload);
       const data = await res.json();
       if (data.success) { setSuccess(data.message); setTimeout(() => { onSave(); onClose(); }, 700); }
       else setError(data.message || 'Error al guardar');
     } catch { setError('No se puede conectar con el servidor'); }
     finally { setSaving(false); }
   };
-
-  const isImage = (url: string) => /\.(jpg|jpeg|png|gif|webp)$/i.test(url);
-  const filename = (url: string) => url.split('/').pop() || url;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50" onClick={onClose}>
@@ -131,11 +105,13 @@ const AvanceModal: React.FC<{
           {/* Sección 1 — azul pizarra */}
           <div className="bg-slate-50 border border-slate-200 rounded-lg p-3">
             <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1">Número de Avance *</label>
-                <input type="number" name="numavance" min="1" value={form.numavance} onChange={change} className="input" />
-              </div>
-              <div>
+              {avance && (
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1">N° de Avance</label>
+                  <div className="input bg-gray-50 text-gray-500 font-mono">#{avance.numavance}</div>
+                </div>
+              )}
+              <div className={avance ? '' : 'col-span-2'}>
                 <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1">Fecha *</label>
                 <input type="date" name="fecha_presentacion" value={form.fecha_presentacion} onChange={change} className="input" />
               </div>
@@ -144,50 +120,113 @@ const AvanceModal: React.FC<{
 
           {/* Sección 2 — azul cielo */}
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-            <label className="block text-xs font-semibold text-blue-700 uppercase tracking-wide mb-1">Contratista que reporta *</label>
-            <select name="contratistaId" value={form.contratistaId}
-              onChange={e => { change(e); setForm(p => ({ ...p, alcanceId: '' })); }}
-              className="input">
-              <option value="">-- Seleccionar contratista --</option>
-              {contratistas.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
-            </select>
-          </div>
-
-          {/* Sección 3 — índigo */}
-          <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-3">
-            <label className="block text-xs font-semibold text-indigo-700 uppercase tracking-wide mb-1">Meta asociada *</label>
-            <select name="metaId" value={form.metaId} onChange={change} className="input">
-              <option value="">-- Seleccionar meta --</option>
-              {metas.map(m => <option key={m.id} value={m.id}>{m.codigo ? `[${m.codigo}] ` : ''}{m.nombre}</option>)}
-            </select>
-          </div>
-
-          {/* Sección 4 — verde azulado */}
-          <div className="bg-teal-50 border border-teal-200 rounded-lg p-3">
-            <label className="block text-xs font-semibold text-teal-700 uppercase tracking-wide mb-1">Alcance del contrato</label>
-            <select name="alcanceId" value={form.alcanceId} onChange={change} className="input"
-              disabled={!form.contratistaId}>
-              <option value="">-- Seleccionar alcance --</option>
-              {alcancesFiltrados.map(a => <option key={a.id} value={a.id}>{a.descripcion}</option>)}
-            </select>
-            {form.contratistaId && alcancesFiltrados.length === 0 && (
-              <p className="text-xs text-amber-600 mt-1">Este contratista no tiene alcances registrados</p>
+            <label className="block text-xs font-semibold text-blue-700 uppercase tracking-wide mb-1 flex items-center gap-1">
+              Contratista que reporta *
+              {isContratista && <Lock className="h-3 w-3 text-blue-500" />}
+            </label>
+            {isContratista ? (
+              <div className="input bg-gray-50 text-gray-700 flex items-center gap-2">
+                <Lock className="h-4 w-4 text-gray-400" />
+                {contratistas.find(c => String(c.id) === form.contratistaId)?.nombre || 'Contratista asignado'}
+              </div>
+            ) : (
+              <select name="contratistaId" value={form.contratistaId}
+                onChange={e => { change(e); setForm(p => ({ ...p, alcanceId: '', metaId: '' })); }}
+                className="input">
+                <option value="">-- Seleccionar contratista --</option>
+                {contratistas.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+              </select>
             )}
           </div>
 
-          {/* Sección 5 — ámbar */}
+          {/* CONTRATISTA: selecciona actividad primero → meta se deriva automáticamente */}
+          {isContratista ? (
+            <>
+              <div className="bg-teal-50 border border-teal-200 rounded-lg p-3">
+                <label className="block text-xs font-semibold text-teal-700 uppercase tracking-wide mb-1">Actividad asignada *</label>
+                {alcancesFiltrados.length === 0 ? (
+                  <p className="text-sm text-amber-600">No tienes actividades asignadas. Contacta al administrador.</p>
+                ) : (
+                  <select name="alcanceId" value={form.alcanceId} onChange={change} className="input">
+                    <option value="">-- Seleccionar actividad --</option>
+                    {alcancesFiltrados.map(a => (
+                      <option key={a.id} value={a.id}>
+                        {a.meta?.nombre ? `[${a.meta.nombre}] ` : ''}{a.descripcion}
+                      </option>
+                    ))}
+                  </select>
+                )}
+                {selectedAlcance && (
+                  <p className="text-xs text-teal-600 mt-1">Periodicidad: {selectedAlcance.periodicidad}</p>
+                )}
+              </div>
+              <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-3">
+                <label className="block text-xs font-semibold text-indigo-700 uppercase tracking-wide mb-1 flex items-center gap-1">
+                  Meta asociada <Lock className="h-3 w-3 text-indigo-400" />
+                </label>
+                <div className="input bg-gray-50 text-gray-700">
+                  {form.metaId
+                    ? (metas.find(m => String(m.id) === form.metaId)?.nombre || `Meta #${form.metaId}`)
+                    : <span className="text-gray-400">Se determina al seleccionar la actividad</span>}
+                </div>
+              </div>
+            </>
+          ) : (
+            <>
+              {/* ADMIN: selección libre de meta y alcance */}
+              <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-3">
+                <label className="block text-xs font-semibold text-indigo-700 uppercase tracking-wide mb-1">Meta asociada *</label>
+                <select name="metaId" value={form.metaId} onChange={change} className="input">
+                  <option value="">-- Seleccionar meta --</option>
+                  {metasDisponibles.map(m => <option key={m.id} value={m.id}>{m.codigo ? `[${m.codigo}] ` : ''}{m.nombre}</option>)}
+                </select>
+              </div>
+              <div className="bg-teal-50 border border-teal-200 rounded-lg p-3">
+                <label className="block text-xs font-semibold text-teal-700 uppercase tracking-wide mb-1">Actividad / Alcance</label>
+                <select name="alcanceId" value={form.alcanceId} onChange={change} className="input"
+                  disabled={!form.contratistaId}>
+                  <option value="">-- Seleccionar actividad --</option>
+                  {alcancesFiltrados.map(a => <option key={a.id} value={a.id}>{a.descripcion}</option>)}
+                </select>
+                {form.contratistaId && alcancesFiltrados.length === 0 && (
+                  <p className="text-xs text-amber-600 mt-1">Este contratista no tiene actividades registradas</p>
+                )}
+              </div>
+            </>
+          )}
+
+          {/* Sección 5 — ámbar: porcentaje solo editable por ADMIN */}
           <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
-            <label className="block text-xs font-semibold text-amber-700 uppercase tracking-wide mb-2">
+            <label className="block text-xs font-semibold text-amber-700 uppercase tracking-wide mb-2 flex items-center gap-1.5">
               Porcentaje de avance: <span className="text-lg font-bold">{form.porcentaje_avance}%</span>
+              {isContratista && <Lock className="h-3.5 w-3.5 text-amber-500 ml-1" />}
             </label>
-            <input
-              type="range" name="porcentaje_avance" min="0" max="100" step="5"
-              value={form.porcentaje_avance} onChange={change}
-              className="w-full h-2 bg-amber-200 rounded-lg appearance-none cursor-pointer accent-amber-600"
-            />
-            <div className="flex justify-between text-xs text-amber-500 mt-1">
-              <span>0%</span><span>25%</span><span>50%</span><span>75%</span><span>100%</span>
-            </div>
+            {isContratista ? (
+              <div>
+                <div className="w-full bg-amber-200 rounded-full h-2.5">
+                  <div
+                    className={`h-2.5 rounded-full ${
+                      Number(form.porcentaje_avance) >= 100 ? 'bg-green-500' :
+                      Number(form.porcentaje_avance) >= 60  ? 'bg-blue-500'  :
+                      Number(form.porcentaje_avance) >= 30  ? 'bg-yellow-500': 'bg-red-400'
+                    }`}
+                    style={{ width: `${form.porcentaje_avance}%` }}
+                  />
+                </div>
+                <p className="text-xs text-amber-500 mt-1.5">El porcentaje es asignado por el administrador.</p>
+              </div>
+            ) : (
+              <>
+                <input
+                  type="range" name="porcentaje_avance" min="0" max="100" step="5"
+                  value={form.porcentaje_avance} onChange={change}
+                  className="w-full h-2 bg-amber-200 rounded-lg appearance-none cursor-pointer accent-amber-600"
+                />
+                <div className="flex justify-between text-xs text-amber-500 mt-1">
+                  <span>0%</span><span>25%</span><span>50%</span><span>75%</span><span>100%</span>
+                </div>
+              </>
+            )}
           </div>
 
           {/* Sección 6 — naranja: aporte a unidades de la meta */}
@@ -209,81 +248,35 @@ const AvanceModal: React.FC<{
               rows={3} className="input resize-none" placeholder="Descripción detallada del avance realizado..." />
           </div>
 
-          {/* Sección 7 — verde */}
+          {/* Sección 7 — verde: enlace de evidencia */}
           <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3">
-            <label className="block text-xs font-semibold text-emerald-700 uppercase tracking-wide mb-2">Evidencia / Archivo adjunto</label>
-
-            {/* Archivo ya subido */}
-            {uploadedUrl && (
-              <div className="mb-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                {isImage(uploadedUrl) ? (
-                  <div className="relative">
-                    <img src={uploadedUrl} alt="evidencia" className="w-full max-h-40 object-cover rounded-md mb-2" />
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-2 text-blue-700">
-                    <Paperclip className="h-4 w-4" />
-                    <a href={uploadedUrl} target="_blank" rel="noreferrer" className="text-sm underline truncate">{filename(uploadedUrl)}</a>
-                  </div>
-                )}
-                <div className="flex items-center justify-between mt-2">
-                  <span className="text-xs text-blue-600 truncate">{filename(uploadedUrl)}</span>
-                  <button type="button" onClick={removeFile} className="text-red-500 hover:text-red-700 text-xs flex items-center gap-1">
-                    <Trash2 className="h-3 w-3" />Quitar
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* Preview del archivo seleccionado (aún no subido) */}
-            {preview && !uploadedUrl && (
-              <div className="mb-3">
-                <img src={preview} alt="preview" className="w-full max-h-36 object-cover rounded-md border border-gray-200" />
-              </div>
-            )}
-
-            {/* Zona de drop / selección */}
-            {!uploadedUrl && (
-              <div
-                className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center cursor-pointer hover:border-primary-400 hover:bg-primary-50 transition-colors"
-                onClick={() => fileRef.current?.click()}
+            <label className="block text-xs font-semibold text-emerald-700 uppercase tracking-wide mb-1 flex items-center gap-1">
+              <LinkIcon className="h-3.5 w-3.5" /> Enlace de evidencia
+            </label>
+            <input
+              type="url"
+              name="reg_imagen"
+              value={form.reg_imagen}
+              onChange={change}
+              className="input"
+              placeholder="https://drive.google.com/... o cualquier URL"
+            />
+            {form.reg_imagen && /^https?:\/\//i.test(form.reg_imagen) && (
+              <a
+                href={form.reg_imagen}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1.5 mt-2 text-xs text-emerald-700 hover:text-emerald-900 underline"
               >
-                <Upload className="h-8 w-8 text-gray-400 mx-auto mb-2" />
-                <p className="text-sm text-gray-600">
-                  {file ? (
-                    <span className="font-medium text-primary-600">{file.name} ({(file.size / 1024).toFixed(1)} KB)</span>
-                  ) : (
-                    <><span className="font-medium text-primary-600">Haz clic para seleccionar</span> o arrastra el archivo<br />
-                    <span className="text-xs text-gray-400">Imágenes, PDF, Word, Excel — máx. 10 MB</span></>
-                  )}
-                </p>
-                <input
-                  ref={fileRef}
-                  type="file"
-                  className="hidden"
-                  accept="image/*,.pdf,.doc,.docx,.xls,.xlsx"
-                  onChange={handleFileChange}
-                />
-              </div>
+                <ExternalLink className="h-3 w-3" />Verificar enlace
+              </a>
             )}
-
-            {/* Botón subir */}
-            {file && !uploadedUrl && (
-              <button
-                type="button"
-                onClick={handleUpload}
-                disabled={uploading}
-                className="mt-2 w-full flex items-center justify-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 text-sm font-medium disabled:opacity-50"
-              >
-                <Upload className="h-4 w-4" />
-                {uploading ? 'Subiendo archivo...' : 'Subir Archivo'}
-              </button>
-            )}
+            <p className="text-xs text-emerald-500 mt-1">Google Drive, OneDrive, SharePoint, Dropbox u otro enlace público</p>
           </div>
 
           <div className="flex justify-end gap-3 pt-2">
             <button type="button" onClick={onClose} className="btn-outline">Cancelar</button>
-            <button type="submit" disabled={saving || uploading} className="btn-primary">
+            <button type="submit" disabled={saving} className="btn-primary">
               {saving ? 'Guardando...' : (avance ? 'Guardar Cambios' : 'Registrar Avance')}
             </button>
           </div>
@@ -304,7 +297,7 @@ const ConfirmDelete: React.FC<{
   const handleDelete = async () => {
     setDeleting(true);
     try {
-      const res  = await fetch(`${API_URL}/avances/${avance.id}`, { method: 'DELETE' });
+      const res  = await apiDelete(`${API_URL}/avances/${avance.id}`);
       const data = await res.json();
       if (data.success) { onDeleted(); onClose(); }
       else setError(data.message || 'Error al eliminar');
@@ -336,6 +329,11 @@ const ConfirmDelete: React.FC<{
 
 /* ───── Página principal ───── */
 const Avances: React.FC = () => {
+  const { usuario } = useAuthStore();
+  const isContratista = usuario?.rol === 'CONTRATISTA';
+  const isAdmin       = usuario?.rol === 'ADMIN';
+  const canEdit       = isAdmin;
+
   const [avances, setAvances]           = useState<Avance[]>([]);
   const [filtered, setFiltered]         = useState<Avance[]>([]);
   const [metas, setMetas]               = useState<Catalogo[]>([]);
@@ -351,15 +349,15 @@ const Avances: React.FC = () => {
     setLoading(true); setError('');
     try {
       const [avRes, mRes, cRes, alRes] = await Promise.all([
-        fetch(`${API_URL}/avances`),
-        fetch(`${API_URL}/metas`),
-        fetch(`${API_URL}/contratistas`),
-        fetch(`${API_URL}/alcances`),
+        apiGet(`${API_URL}/avances`),
+        apiGet(`${API_URL}/metas`),
+        apiGet(`${API_URL}/contratistas`),
+        apiGet(`${API_URL}/alcances`),
       ]);
       const [av, m, c, al] = await Promise.all([avRes.json(), mRes.json(), cRes.json(), alRes.json()]);
-      if (av.success) { const sorted = [...av.data].sort((a, b) => new Date(b.fecha_creacion).getTime() - new Date(a.fecha_creacion).getTime()); setAvances(sorted); setFiltered(sorted); }
+      if (av.success) { const sorted = [...av.data].sort((a: Avance, b: Avance) => b.id - a.id); setAvances(sorted); setFiltered(sorted); }
       else setError('Error al cargar los avances');
-      if (m.success)  setMetas(m.data.map((x: Catalogo) => ({ id: x.id, codigo: (x as any).codigo, nombre: x.nombre })));
+      if (m.success)  setMetas(m.data.map((x: any) => ({ id: x.id, codigo: x.codigo, nombre: x.nombre })));
       if (c.success)  setContratistas(c.data);
       if (al.success) setAlcances(al.data);
     } catch { setError('No se puede conectar con el servidor.'); }
@@ -386,6 +384,8 @@ const Avances: React.FC = () => {
           alcances={alcances}
           onClose={() => setModal(null)}
           onSave={fetchAll}
+          isContratista={isContratista}
+          contratistaIdLocked={isContratista ? usuario?.contratistaId : null}
         />
       )}
       {deleteTarget && (
@@ -460,12 +460,19 @@ const Avances: React.FC = () => {
                       {new Date(avance.fecha_presentacion).toLocaleDateString('es-ES', { year: 'numeric', month: 'long', day: 'numeric' })}
                       <span className="mx-2 text-gray-300">|</span>
                       {avance.contratista?.codigo && <span className="mr-1 font-mono font-bold text-green-700 bg-green-50 px-1.5 py-0.5 rounded text-xs border border-green-200">{avance.contratista.codigo}</span>}
-                      <span className="font-medium text-gray-600">{avance.reportadoPor?.nombre || avance.contratista?.nombre || '-'}</span>
+                      {avance.reportadoPor && (
+                        <span className="inline-flex items-center gap-1 ml-1 text-xs bg-amber-50 text-amber-700 border border-amber-200 px-1.5 py-0.5 rounded">
+                          <UserIcon className="h-3 w-3" />{avance.reportadoPor.nombre}
+                        </span>
+                      )}
+                      {!avance.reportadoPor && <span className="font-medium text-gray-600">{avance.contratista?.nombre || '-'}</span>}
                     </div>
                   </div>
                   <div className="flex gap-2 flex-shrink-0">
                     <button onClick={() => setModal(avance)} className="btn-outline text-sm">Editar</button>
-                    <button onClick={() => setDeleteTarget(avance)} className="btn-outline text-sm text-red-600 hover:text-red-900">Eliminar</button>
+                    {canEdit && (
+                      <button onClick={() => setDeleteTarget(avance)} className="btn-outline text-sm text-red-600 hover:text-red-900">Eliminar</button>
+                    )}
                   </div>
                 </div>
 
@@ -534,19 +541,12 @@ const Avances: React.FC = () => {
                 {/* ── Evidencia — esmeralda ── */}
                 {avance.reg_imagen && (
                   <div className="mt-2 bg-emerald-50 border border-emerald-200 rounded-lg p-3">
-                    <span className="font-semibold text-emerald-700 text-xs uppercase tracking-wide block mb-2">Evidencia adjunta</span>
-                    {/\.(jpg|jpeg|png|gif|webp)$/i.test(avance.reg_imagen) ? (
-                      <a href={avance.reg_imagen} target="_blank" rel="noreferrer">
-                        <img src={avance.reg_imagen} alt="evidencia" className="w-full max-h-48 object-cover rounded-lg border border-emerald-200 hover:opacity-90 transition-opacity" />
-                        <p className="text-xs text-emerald-500 mt-1 text-center">Ver imagen completa</p>
-                      </a>
-                    ) : (
-                      <a href={avance.reg_imagen} target="_blank" rel="noreferrer"
-                        className="flex items-center gap-2 text-sm text-emerald-700 hover:text-emerald-900 bg-white px-3 py-2 rounded-md border border-emerald-300">
-                        <Paperclip className="h-4 w-4 flex-shrink-0" />
-                        <span className="truncate">{avance.reg_imagen.split('/').pop()}</span>
-                      </a>
-                    )}
+                    <span className="font-semibold text-emerald-700 text-xs uppercase tracking-wide block mb-2">Evidencia</span>
+                    <a href={avance.reg_imagen} target="_blank" rel="noreferrer"
+                      className="flex items-center gap-2 text-sm text-emerald-700 hover:text-emerald-900 bg-white px-3 py-2 rounded-md border border-emerald-300 hover:border-emerald-500 transition-colors">
+                      <ExternalLink className="h-4 w-4 flex-shrink-0 text-emerald-500" />
+                      <span className="truncate">{avance.reg_imagen}</span>
+                    </a>
                   </div>
                 )}
               </div>
