@@ -62,7 +62,7 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        REACT_APP_API_URL: http://10.10.10.102:3001/api
+        REACT_APP_API_URL: /api
     container_name: gestion-metas-frontend
     restart: unless-stopped
     ports:
