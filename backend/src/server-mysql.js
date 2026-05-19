@@ -115,8 +115,17 @@ function requireAdminOrSupervisor(req, res, next) {
 // ═════════════════════════════════════════════════════════════════════════════
 app.get('/api/users', authenticate, requireAdmin, async (req, res) => {
   try {
+    const { rol } = req.query;
+    
+    // Construir where clause
+    const whereClause = {};
+    if (rol && rol !== 'todos') {
+      whereClause.rol = rol;
+    }
+    
     const rows = await prisma.usuario.findMany({
-      orderBy: { id: 'asc' },
+      where: whereClause,
+      orderBy: { nombre: 'asc' },
       include: { contratista: { select: { id: true, nombre: true, codigo: true } } },
     });
     const data = rows.map(({ password: _, ...u }) => ({
@@ -135,6 +144,29 @@ app.get('/api/users/:id', authenticate, requireAdmin, async (req, res) => {
     if (!user) return res.status(404).json({ success: false, message: 'Usuario no encontrado' });
     const { password: _, ...userSafe } = user;
     res.json({ success: true, data: { ...userSafe, fechaCreacion: userSafe.fechaCreacion?.toISOString().split('T')[0] } });
+  } catch (e) { res.status(500).json({ success: false, message: e.message }); }
+});
+
+// Alias para mantener compatibilidad con frontend
+app.get('/api/usuarios', authenticate, async (req, res) => {
+  try {
+    const { rol } = req.query;
+    
+    // Construir where clause
+    const whereClause = {};
+    if (rol && rol !== 'todos') {
+      whereClause.rol = rol;
+    }
+    
+    const rows = await prisma.usuario.findMany({
+      where: whereClause,
+      orderBy: { nombre: 'asc' },
+      include: { contratista: { select: { id: true, nombre: true, codigo: true } } },
+    });
+    const data = rows.map(({ password: _, ...u }) => ({
+      ...u, fechaCreacion: u.fechaCreacion?.toISOString().split('T')[0]
+    }));
+    res.json({ success: true, data });
   } catch (e) { res.status(500).json({ success: false, message: e.message }); }
 });
 
@@ -573,6 +605,172 @@ app.delete('/api/avances/:id', authenticate, requireAdmin, async (req, res) => {
     await prisma.avance.delete({ where: { id: parseInt(req.params.id) } });
     res.json({ success: true, message: 'Avance eliminado exitosamente' });
   } catch (e) { res.status(500).json({ success: false, message: e.message }); }
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+// REPORTES - ACTIVIDADES POR USUARIO
+// ═════════════════════════════════════════════════════════════════════════════
+app.get('/api/reportes/actividades-usuario', authenticate, async (req, res) => {
+  try {
+    const { fechaInicio, fechaFin, contratistaId, usuarioId } = req.query;
+
+    const fechaFilter = {};
+    if (fechaInicio || fechaFin) {
+      fechaFilter.fecha_presentacion = {};
+      if (fechaInicio) fechaFilter.fecha_presentacion.gte = fechaInicio;
+      if (fechaFin) fechaFilter.fecha_presentacion.lte = fechaFin;
+    }
+
+    const usuarios = await prisma.usuario.findMany({
+      where: {
+        estado: 'ACTIVO',
+        rol: 'CONTRATISTA',
+        ...(contratistaId && contratistaId !== 'todos' && { contratistaId: parseInt(contratistaId) }),
+        ...(usuarioId && usuarioId !== 'todos' && { id: parseInt(usuarioId) })
+      },
+      include: {
+        contratista: {
+          select: { id: true, nombre: true, codigo: true }
+        }
+      },
+      orderBy: { nombre: 'asc' }
+    });
+
+    const reporteData = await Promise.all(
+      usuarios.map(async (usuario) => {
+        const cid = usuario.contratistaId;
+        if (!cid) {
+          return {
+            usuario: {
+              id: usuario.id,
+              nombre: usuario.nombre,
+              email: usuario.email,
+              rol: usuario.rol,
+              contratista: usuario.contratista
+            },
+            estadisticas: { totalMetas: 0, totalAvances: 0, metasConAvances: 0, avancePromedio: 0 },
+            metasCreadas: [],
+            avances: []
+          };
+        }
+
+        const alcances = await prisma.alcance.findMany({
+          where: {
+            contratistaId: cid
+          },
+          include: {
+            meta: {
+              select: {
+                id: true,
+                codigo: true,
+                nombre: true,
+                estado: true,
+                fecha_creacion: true,
+                fecha_limite: true,
+                unidades: true
+              }
+            }
+          }
+        });
+
+        const avances = await prisma.avance.findMany({
+          where: {
+            contratistaId: cid,
+            ...fechaFilter
+          },
+          include: {
+            meta: {
+              select: { id: true, codigo: true, nombre: true }
+            },
+            contratista: {
+              select: { id: true, nombre: true, codigo: true }
+            }
+          },
+          orderBy: { fecha_presentacion: 'desc' }
+        });
+
+        const metasPorAlcance = alcances.map(a => ({
+          ...a.meta,
+          alcanceId: a.id,
+          descripcionAlcance: a.descripcion,
+          porcentajeAsignado: a.porcentaje_asignado
+        }));
+        const metasPorAvance = avances
+          .filter(a => !metasPorAlcance.some(m => m.id === a.metaId))
+          .map(a => ({
+            ...a.meta,
+            alcanceId: a.alcanceId,
+            descripcionAlcance: a.descripcion,
+            porcentajeAsignado: null
+          }));
+        const metasRelacionadas = [...metasPorAlcance, ...metasPorAvance];
+
+        const totalMetas = metasRelacionadas.length;
+        const totalAvances = avances.length;
+        const metasConAvances = new Set(avances.map(a => a.metaId)).size;
+        const avancePromedio = totalAvances > 0 
+          ? avances.reduce((sum, a) => sum + (a.porcentaje_avance || 0), 0) / totalAvances 
+          : 0;
+        
+        return {
+          usuario: {
+            id: usuario.id,
+            nombre: usuario.nombre,
+            email: usuario.email,
+            rol: usuario.rol,
+            contratista: usuario.contratista
+          },
+          estadisticas: {
+            totalMetas,
+            totalAvances,
+            metasConAvances,
+            avancePromedio: Math.round(avancePromedio * 100) / 100
+          },
+          metasCreadas: metasRelacionadas.map(meta => ({
+            ...meta,
+            tieneAvances: avances.some(a => a.metaId === meta.id),
+            ultimoAvance: avances
+              .filter(a => a.metaId === meta.id)
+              .sort((a, b) => new Date(b.fecha_presentacion) - new Date(a.fecha_presentacion))[0],
+            porcentaje_avance: avances
+              .filter(a => a.metaId === meta.id)
+              .reduce((max, a) => Math.max(max, a.porcentaje_avance || 0), 0)
+          })),
+          avances: avances.map(avance => ({
+            ...avance,
+            porcentaje_avance: avance.porcentaje_avance || 0
+          }))
+        };
+      })
+    );
+    const usuariosConActividad = reporteData;
+    
+    res.json({ 
+      success: true, 
+      data: {
+        usuarios: usuariosConActividad,
+        parametros: {
+          fechaInicio,
+          fechaFin,
+          contratistaId,
+          usuarioId
+        },
+        resumen: {
+          totalUsuarios: usuariosConActividad.length,
+          totalMetasCreadas: usuariosConActividad.reduce((sum, u) => sum + u.estadisticas.totalMetas, 0),
+          totalAvances: usuariosConActividad.reduce((sum, u) => sum + u.estadisticas.totalAvances, 0),
+          avancePromedioGeneral: usuariosConActividad.length > 0
+            ? Math.round(
+                usuariosConActividad.reduce((sum, u) => sum + u.estadisticas.avancePromedio, 0) / 
+                usuariosConActividad.length * 100
+              ) / 100
+            : 0
+        }
+      }
+    });
+  } catch (e) { 
+    res.status(500).json({ success: false, message: e.message }); 
+  }
 });
 
 // ═════════════════════════════════════════════════════════════════════════════

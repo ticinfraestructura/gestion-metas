@@ -240,9 +240,11 @@ const Metas: React.FC = () => {
   const [filtered, setFiltered] = useState<Meta[]>([]);
   const [alcances, setAlcances] = useState<AlcanceContrib[]>([]);
   const [avancesData, setAvancesData] = useState<AvanceMin[]>([]);
+  const [usuariosContratistas, setUsuariosContratistas] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
+  const [filterUsuarioContratista, setFilterUsuarioContratista] = useState('todos');
   const [modalMeta, setModalMeta] = useState<Meta | null | 'new'>(null);
   const [deleteTarget, setDeleteTarget] = useState<Meta | null>(null);
   const [expandedMetaId, setExpandedMetaId] = useState<number | null>(null);
@@ -250,12 +252,18 @@ const Metas: React.FC = () => {
   const fetchMetas = async () => {
     setLoading(true); setError('');
     try {
-      const [mRes, aRes, avRes] = await Promise.all([apiGet(`${API}/metas`), apiGet(`${API}/alcances`), apiGet(`${API}/avances`)]); 
-      const [mData, aData, avData] = await Promise.all([mRes.json(), aRes.json(), avRes.json()]);
+      const [mRes, aRes, avRes, uRes] = await Promise.all([
+        apiGet(`${API}/metas`), 
+        apiGet(`${API}/alcances`), 
+        apiGet(`${API}/avances`),
+        apiGet(`${API}/usuarios?rol=CONTRATISTA`)
+      ]); 
+      const [mData, aData, avData, uData] = await Promise.all([mRes.json(), aRes.json(), avRes.json(), uRes.json()]);
       if (mData.success) { const sorted = [...mData.data].sort((a, b) => new Date(b.fecha_creacion).getTime() - new Date(a.fecha_creacion).getTime()); setMetas(sorted); setFiltered(sorted); }
       else setError('Error al cargar las metas');
       if (aData.success) setAlcances(aData.data);
       if (avData.success) setAvancesData(avData.data);
+      if (uData.success) setUsuariosContratistas(uData.data);
     } catch { setError('No se puede conectar con el servidor'); }
     finally { setLoading(false); }
   };
@@ -263,11 +271,37 @@ const Metas: React.FC = () => {
   useEffect(() => { fetchMetas(); }, []);
 
   useEffect(() => {
-    const q = search.toLowerCase();
-    setFiltered(metas.filter(m =>
-      m.nombre.toLowerCase().includes(q) || m.descripcion.toLowerCase().includes(q)
-    ));
-  }, [search, metas]);
+    const q = search.trim().toLowerCase();
+    let filtered = metas.filter(m =>
+      (m.codigo || '').toLowerCase().includes(q) ||
+      m.nombre.toLowerCase().includes(q) ||
+      m.descripcion.toLowerCase().includes(q)
+    );
+    
+    // Aplicar filtro por usuario contratista
+    if (filterUsuarioContratista !== 'todos' && filterUsuarioContratista !== 'sin-contratista') {
+      const contratistaId = parseInt(filterUsuarioContratista);
+      console.log('Filtrando por contratistaId:', contratistaId);
+      console.log('Total alcances:', alcances.length);
+      console.log('Total avances:', avancesData.length);
+      
+      filtered = filtered.filter(meta => {
+        // Filtrar metas donde el contratista tiene alcances asignados O ha reportado avances
+        const tieneAlcanceContratista = alcances.some(a => 
+          a.metaId === meta.id && a.contratistaId === contratistaId
+        );
+        const tieneAvanceContratista = avancesData.some(a => 
+          a.metaId === meta.id && a.contratistaId === contratistaId
+        );
+        console.log(`Meta ${meta.id}: tieneAlcance=${tieneAlcanceContratista}, tieneAvance=${tieneAvanceContratista}`);
+        return tieneAlcanceContratista || tieneAvanceContratista;
+      });
+      
+      console.log('Metas filtradas:', filtered.length);
+    }
+    
+    setFiltered(filtered);
+  }, [search, metas, filterUsuarioContratista, alcances, avancesData]);
 
   return (
     <div className="space-y-6">
@@ -310,11 +344,28 @@ const Metas: React.FC = () => {
       )}
 
       <div className="card p-6">
-        {/* Búsqueda */}
-        <div className="mb-6 relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-          <input type="text" placeholder="Buscar metas..." className="input pl-10"
-            value={search} onChange={e => setSearch(e.target.value)} />
+        {/* Búsqueda y Filtros */}
+        <div className="mb-6 flex flex-col md:flex-row gap-4">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+            <input type="text" placeholder="Buscar metas..." className="input pl-10 w-full"
+              value={search} onChange={e => setSearch(e.target.value)} />
+          </div>
+          <div className="flex items-center gap-2">
+            <Users className="h-4 w-4 text-gray-500" />
+            <select 
+              value={filterUsuarioContratista} 
+              onChange={e => setFilterUsuarioContratista(e.target.value)} 
+              className="input min-w-64"
+            >
+              <option value="todos">Todos los usuarios contratistas</option>
+              {usuariosContratistas.map(usuario => (
+                <option key={usuario.id} value={usuario.contratistaId || 'sin-contratista'}>
+                  {usuario.nombre} {usuario.contratista ? `(${usuario.contratista.nombre})` : '(Sin contratista)'}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
 
         {/* Tabla */}

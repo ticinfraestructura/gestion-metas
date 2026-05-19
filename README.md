@@ -8,7 +8,8 @@ Aplicación web para la gestión integral de metas, contratistas, alcances y ava
 - ✅ **Autenticación JWT**: Login seguro con roles ADMIN y USUARIO
 - ✅ **Gestión Completa**: CRUD para metas, contratistas, alcances, avances y usuarios
 - ✅ **Dashboard Analytics**: KPIs consolidados, gráfico de barras y avances recientes
-- ✅ **Reportes**: Tablas filtrables de metas, contratistas, avances y alcances
+- ✅ **Reportes**: Tablas filtrables de metas, contratistas, avances, alcances, consolidado por período, actividades por usuario y avances por usuario
+- ✅ **Filtros avanzados**: Búsqueda en tiempo real por código, nombre y descripción de metas; filtros por fechas, contratista y usuario
 - ✅ **Archivos adjuntos**: Subida de imágenes y documentos en avances (hasta 10 MB)
 - ✅ **Acceso en red local**: URL dinámica — funciona desde `localhost` y desde otros dispositivos en la misma red
 
@@ -177,6 +178,28 @@ Todos los datos se almacenan en MySQL y **persisten entre reinicios**:
 - Metas, contratistas, alcances, avances, usuarios → MySQL (`gestion_metas`)
 - Archivos adjuntos → `backend/uploads/` (disco local)
 - Configuración → `backend/.env` (no versionado en git)
+
+## 📊 Reportes y Filtros
+
+El módulo de reportes incluye las siguientes vistas:
+
+| Reporte | Descripción | Filtros principales |
+|---------|-------------|---------------------|
+| **Metas** | Listado de metas con código, estado, fecha límite y completación | Búsqueda por código, nombre o descripción; estado |
+| **Contratistas** | Listado de contratistas | Búsqueda por nombre, identificación o contacto; estado |
+| **Avances** | Avances mensuales registrados por meta y contratista | Mes, meta, contratista, búsqueda por código de meta, nombre o descripción |
+| **Alcances** | Alcances asignados por meta y contratista | Meta, contratista, periodicidad, búsqueda por código/nombre de meta |
+| **Consolidado por Período** | Avances consolidados por períodos mensual, trimestral o semestral | Período, búsqueda por código, nombre o descripción de meta |
+| **Actividades por Usuario** | Actividades relacionadas a un usuario contratista, incluyendo actividades con avance 0% | Fecha inicio, fecha fin, contratista, usuario, búsqueda por código/nombre |
+| **Avances por Usuario** | Reporte de avances por usuario mostrando todas las actividades; si no hay avance, muestra 0% | Fecha inicio, fecha fin, contratista, usuario, búsqueda por código/nombre |
+
+En el módulo **Metas**, la casilla de búsqueda filtra en tiempo real por:
+
+- Código de la meta
+- Nombre de la meta
+- Descripción o contenido de la meta
+
+Los reportes por usuario consideran actividades vinculadas por `alcances` y por `avances`, usando el `contratistaId` asociado al usuario contratista.
 
 ## 🔄 Actualización
 

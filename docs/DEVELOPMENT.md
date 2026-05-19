@@ -152,6 +152,47 @@ frontend/
 │   └── index.tsx        # Punto de entrada
 ```
 
+### Módulos y filtros recientes
+
+#### Metas
+
+El buscador del módulo **Metas** filtra en tiempo real por:
+
+- `codigo`
+- `nombre`
+- `descripcion`
+
+La lógica vive en `frontend/src/pages/Metas.tsx` y se combina con el filtro de usuario contratista. Cuando se selecciona un contratista, se muestran metas relacionadas por:
+
+- Alcances asignados al contratista
+- Avances registrados por el contratista
+
+#### Reportes
+
+El módulo **Reportes** está en `frontend/src/pages/Reportes.tsx` e incluye:
+
+- Metas
+- Contratistas
+- Avances
+- Alcances
+- Consolidado por período
+- Actividades por usuario
+- Avances por usuario
+
+Los reportes **Actividades por Usuario** y **Avances por Usuario** consumen `GET /api/reportes/actividades-usuario` y deben incluir actividades con avance `0%` cuando el usuario contratista tenga actividades relacionadas sin avances.
+
+El filtro de búsqueda de reportes considera códigos de meta/actividad, nombres, descripciones, contratistas y usuarios según corresponda.
+
+#### Backend de reportes
+
+El endpoint `GET /api/reportes/actividades-usuario` está definido en `backend/src/server-mysql.js`.
+
+La relación entre usuario contratista y actividades se resuelve usando `contratistaId`, no `usuarioId`, para cruzar:
+
+- `Alcance.contratistaId`
+- `Avance.contratistaId`
+- `Usuario.contratistaId`
+
 ## Flujo de Trabajo
 
 ### 1. Crear una Nueva Rama

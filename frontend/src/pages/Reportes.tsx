@@ -10,7 +10,52 @@ interface Contratista { id: number; nombre: string; identificacion: string; cont
 interface Avance   { id: number; numavance: number; porcentaje_avance: number; descripcion: string; fecha_presentacion: string; metaId?: number; contratistaId?: number; aporte_meta?: number | null; meta?: { nombre: string; codigo?: string }; contratista?: { nombre: string; codigo?: string }; alcanceId?: number; }
 interface Alcance  { id: number; descripcion: string; periodicidad: string; fecha_inicio: string; fecha_fin: string; porcentaje_asignado: number; meta?: { nombre: string; codigo?: string }; contratista?: { nombre: string }; }
 
-type Tab = 'metas' | 'contratistas' | 'avances' | 'alcances' | 'consolidado';
+// Interfaces para reporte de actividades por usuario
+interface UsuarioReporte {
+  id: number;
+  nombre: string;
+  email: string;
+  rol: string;
+  contratista?: { id: number; nombre: string; codigo: string };
+}
+
+interface MetaUsuario {
+  id: number;
+  codigo: string;
+  nombre: string;
+  estado: string;
+  fecha_creacion: string;
+  fecha_limite: string;
+  unidades?: number;
+  tieneAvances: boolean;
+  ultimoAvance?: any;
+  porcentaje_avance?: number;
+}
+
+interface AvanceUsuario {
+  id: number;
+  numavance: number;
+  descripcion: string;
+  fecha_presentacion: string;
+  porcentaje_avance: number;
+  aporte_meta?: number;
+  meta: { id: number; codigo: string; nombre: string };
+  contratista: { id: number; nombre: string; codigo: string };
+}
+
+interface ActividadUsuario {
+  usuario: UsuarioReporte;
+  estadisticas: {
+    totalMetas: number;
+    totalAvances: number;
+    metasConAvances: number;
+    avancePromedio: number;
+  };
+  metasCreadas: MetaUsuario[];
+  avances: AvanceUsuario[];
+}
+
+type Tab = 'metas' | 'contratistas' | 'avances' | 'alcances' | 'consolidado' | 'actividades-usuario' | 'avances-usuario';
 
 const TABS: { key: Tab; label: string }[] = [
   { key: 'metas',        label: 'Metas' },
@@ -18,6 +63,8 @@ const TABS: { key: Tab; label: string }[] = [
   { key: 'avances',      label: 'Avances' },
   { key: 'alcances',     label: 'Alcances' },
   { key: 'consolidado',  label: '📊 Consolidado por Período' },
+  { key: 'actividades-usuario', label: '👤 Actividades por Usuario' },
+  { key: 'avances-usuario', label: '📈 Avances por Usuario' },
 ];
 
 const estadoLabel: Record<string, string> = {
@@ -61,6 +108,14 @@ const Reportes: React.FC = () => {
   const [filterMeta, setFilterMeta]         = useState('');
   const [filterContratista, setFilterContratista] = useState('');
   const [filterMes, setFilterMes]           = useState(() => new Date().toISOString().slice(0, 7));
+  
+  // Estados para reporte de actividades por usuario
+  const [actividadesUsuario, setActividadesUsuario] = useState<ActividadUsuario[]>([]);
+  const [usuarios, setUsuarios] = useState<UsuarioReporte[]>([]);
+  const [filterFechaInicio, setFilterFechaInicio] = useState('');
+  const [filterFechaFin, setFilterFechaFin] = useState('');
+  const [filterContratistaAct, setFilterContratistaAct] = useState('todos');
+  const [filterUsuarioAct, setFilterUsuarioAct] = useState('todos');
   const printRef = useRef<HTMLDivElement>(null);
   const [periodoTipo, setPeriodoTipo] = useState<PeriodoTipo>('mensual');
   const [periodoMes, setPeriodoMes]   = useState(() => new Date().toISOString().slice(0, 7));
@@ -108,13 +163,51 @@ const Reportes: React.FC = () => {
     } finally { setLoading(false); }
   };
 
-  useEffect(() => { fetchAll(); }, []);
+  const fetchActividadesUsuario = async () => {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (filterFechaInicio) params.append('fechaInicio', filterFechaInicio);
+      if (filterFechaFin) params.append('fechaFin', filterFechaFin);
+      if (filterContratistaAct !== 'todos') params.append('contratistaId', filterContratistaAct);
+      if (filterUsuarioAct !== 'todos') params.append('usuarioId', filterUsuarioAct);
+      
+      const response = await apiGet(`${API}/reportes/actividades-usuario?${params.toString()}`);
+      const data = await response.json();
+      
+      if (data.success) {
+        setActividadesUsuario(data.data.usuarios);
+        // Extraer usuarios únicos para el filtro
+        const usuariosUnicos = data.data.usuarios.map((u: ActividadUsuario) => u.usuario);
+        setUsuarios(usuariosUnicos);
+      }
+    } catch (error) {
+      console.error('Error cargando actividades por usuario:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { 
+  if (tab === 'actividades-usuario' || tab === 'avances-usuario') {
+    fetchActividadesUsuario();
+  } else {
+    fetchAll();
+  }
+}, [tab]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* reset filtros al cambiar tab */
   useEffect(() => {
     setSearch(''); setFilterEstado(''); setFilterMeta(''); setFilterContratista('');
     if (tab === 'avances') setFilterMes(new Date().toISOString().slice(0, 7));
   }, [tab]);
+
+  // Recargar actividades por usuario cuando cambian los filtros
+  useEffect(() => {
+    if (tab === 'actividades-usuario' || tab === 'avances-usuario') {
+      fetchActividadesUsuario();
+    }
+  }, [filterFechaInicio, filterFechaFin, filterContratistaAct, filterUsuarioAct]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* ─── Filtrado ─── */
   const filteredMetas = metas.filter(m =>
@@ -130,6 +223,7 @@ const Reportes: React.FC = () => {
     return (
       (!filterMes || fechaMes === filterMes) &&
       (!search || a.descripcion.toLowerCase().includes(search.toLowerCase()) ||
+        (a.meta?.codigo || '').toLowerCase().includes(search.toLowerCase()) ||
         (a.meta?.nombre || '').toLowerCase().includes(search.toLowerCase()) ||
         (a.contratista?.nombre || '').toLowerCase().includes(search.toLowerCase())) &&
       (!filterMeta || (a.meta?.nombre || '') === filterMeta) &&
@@ -150,15 +244,32 @@ const Reportes: React.FC = () => {
   ).map(r => ({ ...r, promPct: Math.round(r.sumPct / r.count) }))
    .sort((a, b) => b.promPct - a.promPct);
   const filteredAlcances = alcances.filter(a =>
-    (!search || a.descripcion.toLowerCase().includes(search.toLowerCase()) || (a.meta?.nombre || '').toLowerCase().includes(search.toLowerCase()) || (a.contratista?.nombre || '').toLowerCase().includes(search.toLowerCase())) &&
+    (!search || a.descripcion.toLowerCase().includes(search.toLowerCase()) || (a.meta?.codigo || '').toLowerCase().includes(search.toLowerCase()) || (a.meta?.nombre || '').toLowerCase().includes(search.toLowerCase()) || (a.contratista?.nombre || '').toLowerCase().includes(search.toLowerCase())) &&
     (!filterMeta || (a.meta?.nombre || '') === filterMeta) &&
     (!filterContratista || (a.contratista?.nombre || '') === filterContratista) &&
     (!filterEstado || a.periodicidad === filterEstado)
   );
 
+  const filteredActividadesUsuario = actividadesUsuario.map(userData => ({
+    ...userData,
+    metasCreadas: userData.metasCreadas.filter(meta =>
+      !search ||
+      (meta.codigo || '').toLowerCase().includes(search.toLowerCase()) ||
+      meta.nombre.toLowerCase().includes(search.toLowerCase()) ||
+      (meta.ultimoAvance?.descripcion || '').toLowerCase().includes(search.toLowerCase()) ||
+      (userData.usuario.nombre || '').toLowerCase().includes(search.toLowerCase()) ||
+      (userData.usuario.contratista?.nombre || '').toLowerCase().includes(search.toLowerCase())
+    )
+  })).filter(userData => userData.metasCreadas.length > 0 || !search);
+
   const consolidadoPeriodo = getPeriodRange(periodoTipo, periodoMes, periodoTrim, periodoSem);
   const avancesPeriodo = avances.filter(a => { const d = new Date(a.fecha_presentacion); return d >= consolidadoPeriodo.start && d <= consolidadoPeriodo.end; });
-  const consolidadoData = (metas.map(meta => {
+  const consolidadoData = (metas.filter(meta =>
+    !search ||
+    (meta.codigo || '').toLowerCase().includes(search.toLowerCase()) ||
+    meta.nombre.toLowerCase().includes(search.toLowerCase()) ||
+    meta.descripcion.toLowerCase().includes(search.toLowerCase())
+  ).map(meta => {
     const avMeta = avancesPeriodo.filter(a => a.metaId === meta.id);
     if (!avMeta.length) return null;
     const byC: Record<string, { nombre: string; codigo: string; count: number; maxPct: number; aporte: number; ultFecha: string }> = {};
@@ -172,7 +283,7 @@ const Reportes: React.FC = () => {
     return { meta, rows: Object.values(byC).sort((a,b) => b.maxPct - a.maxPct) };
   }).filter(Boolean)) as { meta: Meta; rows: { nombre: string; codigo: string; count: number; maxPct: number; aporte: number; ultFecha: string }[] }[];
 
-  const currentCount = tab === 'metas' ? filteredMetas.length : tab === 'contratistas' ? filteredContratistas.length : tab === 'avances' ? filteredAvances.length : tab === 'consolidado' ? consolidadoData.length : filteredAlcances.length;
+  const currentCount = tab === 'metas' ? filteredMetas.length : tab === 'contratistas' ? filteredContratistas.length : tab === 'avances' ? filteredAvances.length : tab === 'consolidado' ? consolidadoData.length : (tab === 'actividades-usuario' || tab === 'avances-usuario') ? filteredActividadesUsuario.reduce((sum, u) => sum + u.metasCreadas.length, 0) : filteredAlcances.length;
 
   const handlePrint = () => window.print();
 
@@ -400,6 +511,262 @@ const Reportes: React.FC = () => {
     </table>
   );
 
+  const SectionActividadesUsuario = () => (
+    filteredActividadesUsuario.length === 0
+      ? <div className="flex flex-col items-center gap-2 text-gray-400 py-16">
+          <FileText className="h-10 w-10 opacity-40" />
+          <p className="text-sm font-medium">Sin actividades encontradas</p>
+          <p className="text-xs">No hay actividades para los filtros seleccionados</p>
+        </div>
+      : <div className="space-y-6">
+          {/* Resumen general */}
+          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-4">
+            <h3 className="text-sm font-semibold text-blue-900 mb-3">Resumen del Reporte</h3>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
+              <div>
+                <p className="text-blue-600 font-medium">Usuarios Activos</p>
+                <p className="text-2xl font-bold text-blue-900">{filteredActividadesUsuario.length}</p>
+              </div>
+              <div>
+                <p className="text-blue-600 font-medium">Total Metas Creadas</p>
+                <p className="text-2xl font-bold text-blue-900">
+                  {filteredActividadesUsuario.reduce((sum, u) => sum + u.metasCreadas.length, 0)}
+                </p>
+              </div>
+              <div>
+                <p className="text-blue-600 font-medium">Total Avances</p>
+                <p className="text-2xl font-bold text-blue-900">
+                  {filteredActividadesUsuario.reduce((sum, u) => sum + u.metasCreadas.filter(m => m.tieneAvances).length, 0)}
+                </p>
+              </div>
+              <div>
+                <p className="text-blue-600 font-medium">Avance Promedio</p>
+                <p className="text-2xl font-bold text-blue-900">
+                  {filteredActividadesUsuario.length > 0 
+                    ? Math.round(
+                        filteredActividadesUsuario.reduce((sum, u) => sum + u.estadisticas.avancePromedio, 0) / 
+                        filteredActividadesUsuario.length * 100
+                      ) / 100
+                    : 0}%
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Lista de usuarios con sus actividades */}
+          {filteredActividadesUsuario.map((userData) => (
+            <div key={userData.usuario.id} className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+              {/* Encabezado del usuario */}
+              <div className="bg-gray-50 border-b border-gray-200 p-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
+                      <span className="text-blue-600 font-bold text-sm">
+                        {userData.usuario.nombre.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
+                      </span>
+                    </div>
+                    <div>
+                      <h4 className="font-semibold text-gray-900">{userData.usuario.nombre}</h4>
+                      <p className="text-xs text-gray-500">{userData.usuario.email} • {userData.usuario.rol}</p>
+                      {userData.usuario.contratista && (
+                        <p className="text-xs text-gray-500">Contratista: {userData.usuario.contratista.nombre}</p>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-4 text-xs">
+                    <div className="text-center">
+                      <p className="font-semibold text-gray-700">{userData.estadisticas.totalMetas}</p>
+                      <p className="text-gray-500">Metas</p>
+                    </div>
+                    <div className="text-center">
+                      <p className="font-semibold text-gray-700">{userData.estadisticas.totalAvances}</p>
+                      <p className="text-gray-500">Avances</p>
+                    </div>
+                    <div className="text-center">
+                      <p className="font-semibold text-gray-700">{userData.estadisticas.avancePromedio}%</p>
+                      <p className="text-gray-500">Promedio</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Contenido del usuario */}
+              <div className="p-4 space-y-4">
+                {/* Actividades relacionadas */}
+                {userData.metasCreadas.length > 0 && (
+                  <div>
+                    <h5 className="text-sm font-semibold text-gray-700 mb-2">Actividades Relacionadas ({userData.metasCreadas.length})</h5>
+                    <div className="space-y-2">
+                      {userData.metasCreadas.map((meta) => (
+                        <div key={meta.id} className="flex items-center justify-between p-2 bg-gray-50 rounded text-xs">
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono text-xs font-bold text-primary-700 bg-primary-50 px-1 py-0.5 rounded">
+                              {meta.codigo || '—'}
+                            </span>
+                            <span className="text-gray-700">{meta.nombre}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className={`font-bold ${(meta.porcentaje_avance ?? 0) > 0 ? 'text-green-700' : 'text-gray-500'}`}>
+                              {meta.porcentaje_avance ?? 0}%
+                            </span>
+                            <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${estadoClass[meta.estado] || 'bg-gray-100 text-gray-700'}`}>
+                              {estadoLabel[meta.estado] || meta.estado}
+                            </span>
+                            <span className="text-gray-500">
+                              {meta.tieneAvances ? '✓ Con avances' : '✗ Sin avances'}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Avances reportados */}
+                {userData.avances.length > 0 && (
+                  <div>
+                    <h5 className="text-sm font-semibold text-gray-700 mb-2">Avances Reportados ({userData.avances.length})</h5>
+                    <div className="space-y-2">
+                      {userData.avances.map((avance) => (
+                        <div key={avance.id} className="flex items-center justify-between p-2 bg-green-50 rounded text-xs">
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono text-xs font-bold text-green-700 bg-green-50 px-1 py-0.5 rounded">
+                              {avance.meta.codigo || '—'}
+                            </span>
+                            <span className="text-gray-700">{avance.meta.nombre}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-semibold text-green-700">{avance.porcentaje_avance}%</span>
+                            <span className="text-gray-500">{avance.fecha_presentacion}</span>
+                            <span className="text-gray-500">{avance.contratista.nombre}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Si no hay actividades */}
+                {userData.metasCreadas.length === 0 && userData.avances.length === 0 && (
+                  <div className="text-center py-4 text-gray-400 text-xs">
+                    <p>Este usuario no tiene actividades en el período seleccionado</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+  );
+
+  const SectionAvancesUsuario = () => (
+    filteredActividadesUsuario.length === 0
+      ? <div className="flex flex-col items-center gap-2 text-gray-400 py-16">
+          <FileText className="h-10 w-10 opacity-40" />
+          <p className="text-sm font-medium">Sin avances encontrados</p>
+          <p className="text-xs">No hay actividades para los filtros seleccionados</p>
+        </div>
+      : <div className="space-y-6">
+          <div className="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-lg p-4">
+            <h3 className="text-sm font-semibold text-green-900 mb-3">Resumen de Avances por Usuario</h3>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
+              <div>
+                <p className="text-green-600 font-medium">Usuarios</p>
+                <p className="text-2xl font-bold text-green-900">{filteredActividadesUsuario.length}</p>
+              </div>
+              <div>
+                <p className="text-green-600 font-medium">Actividades</p>
+                <p className="text-2xl font-bold text-green-900">
+                  {filteredActividadesUsuario.reduce((sum, u) => sum + u.metasCreadas.length, 0)}
+                </p>
+              </div>
+              <div>
+                <p className="text-green-600 font-medium">Avances Registrados</p>
+                <p className="text-2xl font-bold text-green-900">
+                  {filteredActividadesUsuario.reduce((sum, u) => sum + u.metasCreadas.filter(m => m.tieneAvances).length, 0)}
+                </p>
+              </div>
+              <div>
+                <p className="text-green-600 font-medium">Actividades sin avance</p>
+                <p className="text-2xl font-bold text-green-900">
+                  {filteredActividadesUsuario.reduce((sum, u) => sum + u.metasCreadas.filter(m => !m.tieneAvances).length, 0)}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {filteredActividadesUsuario.map((userData) => (
+            <div key={userData.usuario.id} className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+              <div className="bg-gray-50 border-b border-gray-200 p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h4 className="font-semibold text-gray-900">{userData.usuario.nombre}</h4>
+                    <p className="text-xs text-gray-500">
+                      {userData.usuario.email} • {userData.usuario.rol}
+                      {userData.usuario.contratista ? ` • Contratista: ${userData.usuario.contratista.nombre}` : ''}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-4 text-xs">
+                    <div className="text-center">
+                      <p className="font-semibold text-gray-700">{userData.estadisticas.totalMetas}</p>
+                      <p className="text-gray-500">Actividades</p>
+                    </div>
+                    <div className="text-center">
+                      <p className="font-semibold text-gray-700">{userData.estadisticas.totalAvances}</p>
+                      <p className="text-gray-500">Avances</p>
+                    </div>
+                    <div className="text-center">
+                      <p className="font-semibold text-gray-700">{userData.estadisticas.avancePromedio}%</p>
+                      <p className="text-gray-500">Promedio</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-white">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actividad</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Estado</th>
+                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Avance</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Último registro</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Observación</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {userData.metasCreadas.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="px-4 py-8 text-center text-xs text-gray-400">Sin actividades relacionadas</td>
+                    </tr>
+                  ) : userData.metasCreadas.map((meta) => (
+                    <tr key={meta.id} className="hover:bg-gray-50">
+                      <td className="px-4 py-3 text-sm">
+                        <div className="font-medium text-gray-900">{meta.codigo ? `[${meta.codigo}] ` : ''}{meta.nombre}</div>
+                      </td>
+                      <td className="px-4 py-3 text-xs">
+                        <span className={`px-2 py-0.5 rounded-full font-semibold ${estadoClass[meta.estado] || 'bg-gray-100 text-gray-700'}`}>
+                          {estadoLabel[meta.estado] || meta.estado}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <span className={`text-sm font-bold ${(meta.porcentaje_avance ?? 0) > 0 ? 'text-green-700' : 'text-gray-500'}`}>
+                          {meta.porcentaje_avance ?? 0}%
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-xs text-gray-600">
+                        {meta.ultimoAvance?.fecha_presentacion || 'Sin registro'}
+                      </td>
+                      <td className="px-4 py-3 text-xs text-gray-600">
+                        {meta.ultimoAvance?.descripcion || 'Actividad sin avance registrado'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ))}
+        </div>
+  );
+
   return (
     <>
       {/* Print styles */}
@@ -501,6 +868,23 @@ const Reportes: React.FC = () => {
               </select>
             )}
 
+            {(tab === 'actividades-usuario' || tab === 'avances-usuario') && (
+              <>
+                <input type="date" value={filterFechaInicio} onChange={e => setFilterFechaInicio(e.target.value)} 
+                  placeholder="Fecha inicio" className="input py-1.5 text-sm w-40" />
+                <input type="date" value={filterFechaFin} onChange={e => setFilterFechaFin(e.target.value)} 
+                  placeholder="Fecha fin" className="input py-1.5 text-sm w-40" />
+                <select value={filterContratistaAct} onChange={e => setFilterContratistaAct(e.target.value)} className="input py-1.5 text-sm w-52">
+                  <option value="todos">Todos los contratistas</option>
+                  {contratistas.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+                </select>
+                <select value={filterUsuarioAct} onChange={e => setFilterUsuarioAct(e.target.value)} className="input py-1.5 text-sm w-52">
+                  <option value="todos">Todos los usuarios</option>
+                  {usuarios.map(u => <option key={u.id} value={u.id}>{u.nombre}</option>)}
+                </select>
+              </>
+            )}
+
             {tab === 'consolidado' && (
               <div className="flex items-center gap-2 flex-wrap">
                 <div className="flex rounded-lg border border-gray-200 overflow-hidden text-xs font-medium">
@@ -559,6 +943,8 @@ const Reportes: React.FC = () => {
                 {tab === 'avances'      && <TableAvances />}
                 {tab === 'alcances'     && <TableAlcances />}
                 {tab === 'consolidado'  && <SectionConsolidado />}
+                {tab === 'actividades-usuario' && <SectionActividadesUsuario />}
+                {tab === 'avances-usuario' && <SectionAvancesUsuario />}
               </div>
             )}
           </div>

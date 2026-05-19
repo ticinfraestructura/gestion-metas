@@ -202,6 +202,97 @@ Actualiza un avance existente.
 #### DELETE /avances/:id
 Elimina un avance.
 
+### Usuarios
+
+#### GET /users
+Obtiene usuarios del sistema. Soporta filtro por rol y retorna la relación con contratista cuando aplica.
+
+**Query Parameters:**
+- `rol`: Filtrar por rol. Ejemplo: `CONTRATISTA`
+
+#### GET /usuarios
+Alias compatible de `/users`. Se usa desde el frontend para cargar usuarios contratistas en filtros.
+
+**Ejemplo:**
+```http
+GET /api/usuarios?rol=CONTRATISTA
+Authorization: Bearer <token>
+```
+
+### Reportes
+
+#### GET /reportes/actividades-usuario
+Genera un reporte parametrizable de actividades y avances por usuario contratista.
+
+El reporte incluye actividades relacionadas por:
+
+- Alcances asignados al contratista (`alcances.contratistaId`)
+- Avances reportados por el contratista (`avances.contratistaId`)
+
+Si una actividad relacionada no tiene avances en el período seleccionado, se incluye con avance `0%`.
+
+**Query Parameters:**
+- `fechaInicio`: Fecha inicial del período para avances (`YYYY-MM-DD`)
+- `fechaFin`: Fecha final del período para avances (`YYYY-MM-DD`)
+- `contratistaId`: ID del contratista asociado al usuario
+- `usuarioId`: ID del usuario contratista
+
+**Ejemplo:**
+```http
+GET /api/reportes/actividades-usuario?fechaInicio=2026-05-01&fechaFin=2026-05-31&contratistaId=4&usuarioId=12
+Authorization: Bearer <token>
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "usuarios": [
+      {
+        "usuario": {
+          "id": 12,
+          "nombre": "María Camila Amaya",
+          "email": "maria@example.com",
+          "rol": "CONTRATISTA",
+          "contratista": {
+            "id": 4,
+            "nombre": "María Camila Amaya",
+            "codigo": "CONT-004"
+          }
+        },
+        "estadisticas": {
+          "totalMetas": 6,
+          "totalAvances": 3,
+          "metasConAvances": 2,
+          "avancePromedio": 45
+        },
+        "metasCreadas": [
+          {
+            "id": 1,
+            "codigo": "META-001",
+            "nombre": "Actividad relacionada",
+            "estado": "EN_PROGRESO",
+            "tieneAvances": true,
+            "porcentaje_avance": 60
+          }
+        ],
+        "avances": []
+      }
+    ],
+    "parametros": {
+      "fechaInicio": "2026-05-01",
+      "fechaFin": "2026-05-31",
+      "contratistaId": "4",
+      "usuarioId": "12"
+    }
+  }
+}
+```
+
+#### Filtros de reportes en frontend
+El módulo **Reportes** permite búsqueda en tiempo real por código de meta/actividad, nombre, descripción, contratista y usuario según la pestaña activa. Las pestañas de usuario usan el endpoint `/reportes/actividades-usuario`.
+
 ### Dashboard
 
 #### GET /dashboard/stats
