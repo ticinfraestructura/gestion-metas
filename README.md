@@ -187,7 +187,7 @@ El módulo de reportes incluye las siguientes vistas:
 |---------|-------------|---------------------|
 | **Metas** | Listado de metas con código, estado, fecha límite y completación | Búsqueda por código, nombre o descripción; estado |
 | **Contratistas** | Listado de contratistas | Búsqueda por nombre, identificación o contacto; estado |
-| **Avances** | Avances mensuales registrados por meta y contratista | Mes, meta, contratista, búsqueda por código de meta, nombre o descripción |
+| **Avances** | Avances mensuales registrados por meta y contratista | Selector mensual persistente, meta, contratista, búsqueda por código de meta, nombre o descripción |
 | **Alcances** | Alcances asignados por meta y contratista | Meta, contratista, periodicidad, búsqueda por código/nombre de meta |
 | **Consolidado por Período** | Avances consolidados por períodos mensual, trimestral o semestral | Período, búsqueda por código, nombre o descripción de meta |
 | **Actividades por Usuario** | Actividades relacionadas a un usuario contratista, incluyendo actividades con avance 0% | Fecha inicio, fecha fin, contratista, usuario, búsqueda por código/nombre |
@@ -200,6 +200,8 @@ En el módulo **Metas**, la casilla de búsqueda filtra en tiempo real por:
 - Descripción o contenido de la meta
 
 Los reportes por usuario consideran actividades vinculadas por `alcances` y por `avances`, usando el `contratistaId` asociado al usuario contratista.
+
+En el reporte **Avances**, el mes seleccionado se conserva al cambiar de pestaña y el filtrado mensual compara las fechas por formato `YYYY-MM`, permitiendo consultar períodos anteriores como febrero de 2026 sin que el reporte vuelva automáticamente al mes actual.
 
 ## 🔄 Actualización
 

@@ -183,6 +183,8 @@ Los reportes **Actividades por Usuario** y **Avances por Usuario** consumen `GET
 
 El filtro de búsqueda de reportes considera códigos de meta/actividad, nombres, descripciones, contratistas y usuarios según corresponda.
 
+En la pestaña **Avances**, el filtro mensual se calcula con una función que extrae el mes en formato `YYYY-MM` desde `fecha_presentacion`. El selector mensual mantiene el mes elegido al cambiar de pestaña y los botones anterior/siguiente construyen el mes con fechas locales para evitar desfases por UTC. Esto permite consultar correctamente avances históricos, por ejemplo febrero de 2026.
+
 #### Backend de reportes
 
 El endpoint `GET /api/reportes/actividades-usuario` está definido en `backend/src/server-mysql.js`.
