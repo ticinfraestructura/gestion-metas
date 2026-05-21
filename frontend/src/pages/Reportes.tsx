@@ -129,13 +129,25 @@ const Reportes: React.FC = () => {
       .toLocaleDateString('es-ES', { month: 'long', year: 'numeric' })
       .replace(/^./, c => c.toUpperCase());
   };
+  const getFechaMes = (fecha: string) => {
+    if (!fecha) return '';
+    const match = fecha.match(/^(\d{4}-\d{2})/);
+    if (match) return match[1];
+    const d = new Date(fecha);
+    if (Number.isNaN(d.getTime())) return '';
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    return `${year}-${month}`;
+  };
   const prevMes = () => {
-    const d = new Date(filterMes + '-01'); d.setMonth(d.getMonth() - 1);
-    setFilterMes(d.toISOString().slice(0, 7));
+    const [year, month] = filterMes.split('-').map(Number);
+    const d = new Date(year, month - 2, 1);
+    setFilterMes(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
   };
   const nextMes = () => {
-    const d = new Date(filterMes + '-01'); d.setMonth(d.getMonth() + 1);
-    setFilterMes(d.toISOString().slice(0, 7));
+    const [year, month] = filterMes.split('-').map(Number);
+    const d = new Date(year, month, 1);
+    setFilterMes(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
   };
   const prevPeriodo = () => {
     if (periodoTipo === 'mensual') { const d = new Date(periodoMes+'-01'); d.setMonth(d.getMonth()-1); setPeriodoMes(d.toISOString().slice(0,7)); return; }
@@ -199,7 +211,6 @@ const Reportes: React.FC = () => {
   /* reset filtros al cambiar tab */
   useEffect(() => {
     setSearch(''); setFilterEstado(''); setFilterMeta(''); setFilterContratista('');
-    if (tab === 'avances') setFilterMes(new Date().toISOString().slice(0, 7));
   }, [tab]);
 
   // Recargar actividades por usuario cuando cambian los filtros
@@ -219,7 +230,7 @@ const Reportes: React.FC = () => {
     (!filterEstado || c.estado === filterEstado)
   );
   const filteredAvances = avances.filter(a => {
-    const fechaMes = a.fecha_presentacion ? a.fecha_presentacion.slice(0, 7) : '';
+    const fechaMes = getFechaMes(a.fecha_presentacion);
     return (
       (!filterMes || fechaMes === filterMes) &&
       (!search || a.descripcion.toLowerCase().includes(search.toLowerCase()) ||
