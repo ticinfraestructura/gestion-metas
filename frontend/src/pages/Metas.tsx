@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Target, Plus, Search, RefreshCw, AlertCircle, X, CheckCircle, TrendingUp, Users, ChevronDown, ChevronUp } from 'lucide-react';
 
 import { API_BASE as API } from '../config';
@@ -248,6 +248,9 @@ const Metas: React.FC = () => {
   const [modalMeta, setModalMeta] = useState<Meta | null | 'new'>(null);
   const [deleteTarget, setDeleteTarget] = useState<Meta | null>(null);
   const [expandedMetaId, setExpandedMetaId] = useState<number | null>(null);
+  const topScrollRef = useRef<HTMLDivElement>(null);
+  const tableScrollRef = useRef<HTMLDivElement>(null);
+  const syncingScroll = useRef(false);
 
   const fetchMetas = async () => {
     setLoading(true); setError('');
@@ -302,6 +305,17 @@ const Metas: React.FC = () => {
     
     setFiltered(filtered);
   }, [search, metas, filterUsuarioContratista, alcances, avancesData]);
+
+  const syncHorizontalScroll = (source: 'top' | 'table') => {
+    if (syncingScroll.current) return;
+    const top = topScrollRef.current;
+    const table = tableScrollRef.current;
+    if (!top || !table) return;
+    syncingScroll.current = true;
+    if (source === 'top') table.scrollLeft = top.scrollLeft;
+    else top.scrollLeft = table.scrollLeft;
+    requestAnimationFrame(() => { syncingScroll.current = false; });
+  };
 
   return (
     <div className="space-y-6">
@@ -375,8 +389,16 @@ const Metas: React.FC = () => {
             <span className="ml-3 text-gray-600">Cargando metas...</span>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
+          <>
+          <div
+            ref={topScrollRef}
+            onScroll={() => syncHorizontalScroll('top')}
+            className="sticky top-0 z-30 overflow-x-auto bg-white border border-gray-200 rounded-lg mb-2 shadow-sm"
+          >
+            <div className="h-3 min-w-[1400px]" />
+          </div>
+          <div ref={tableScrollRef} onScroll={() => syncHorizontalScroll('table')} className="overflow-x-auto">
+            <table className="min-w-[1400px] divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Código</th>
@@ -389,7 +411,7 @@ const Metas: React.FC = () => {
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Fecha Límite</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Creador</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Contribuidores</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Acciones</th>
+                  <th className="sticky right-0 z-20 bg-gray-50 px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase shadow-[-8px_0_12px_-12px_rgba(0,0,0,0.35)]">Acciones</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
@@ -471,7 +493,7 @@ const Metas: React.FC = () => {
                               {contrib.length > 0 && (expanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />)}
                             </button>
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-3">
+                          <td className={`sticky right-0 z-10 px-6 py-4 whitespace-nowrap text-sm font-medium space-x-3 shadow-[-8px_0_12px_-12px_rgba(0,0,0,0.35)] ${rowColor}`}>
                             <button onClick={() => setModalMeta(meta)}
                               className="text-primary-600 hover:text-primary-900 font-medium">Editar</button>
                             <button onClick={() => setDeleteTarget(meta)}
@@ -545,6 +567,7 @@ const Metas: React.FC = () => {
               </tbody>
             </table>
           </div>
+          </>
         )}
       </div>
     </div>

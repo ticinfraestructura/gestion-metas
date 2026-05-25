@@ -1,16 +1,23 @@
 const { PrismaClient } = require('@prisma/client');
+const bcrypt = require('bcryptjs');
 const prisma = new PrismaClient();
 
 async function main() {
   console.log('🌱 Iniciando seed de base de datos MySQL...');
 
   // ── Usuarios ──────────────────────────────────────────────────────────────
+  const adminPassword = await bcrypt.hash('admin123', 10);
+  const userPassword = await bcrypt.hash('user123', 10);
+  const anaPassword = await bcrypt.hash('ana123', 10);
+  const carlosPassword = await bcrypt.hash('carlos123', 10);
+  const lauraPassword = await bcrypt.hash('laura123', 10);
+
   const usuarios = await Promise.all([
-    prisma.usuario.upsert({ where: { email: 'admin@gestionmetas.com' },    update: {}, create: { nombre: 'Administrador',  email: 'admin@gestionmetas.com',   password: 'admin123',  rol: 'ADMIN',   estado: 'ACTIVO',   telefono: '' } }),
-    prisma.usuario.upsert({ where: { email: 'usuario@gestionmetas.com' },  update: {}, create: { nombre: 'Usuario Prueba', email: 'usuario@gestionmetas.com', password: 'user123',   rol: 'USUARIO', estado: 'ACTIVO',   telefono: '' } }),
-    prisma.usuario.upsert({ where: { email: 'ana@gestionmetas.com' },      update: {}, create: { nombre: 'Ana Rodríguez',  email: 'ana@gestionmetas.com',     password: 'ana123',    rol: 'USUARIO', estado: 'ACTIVO',   telefono: '+58 412 555 0101' } }),
-    prisma.usuario.upsert({ where: { email: 'carlos@gestionmetas.com' },   update: {}, create: { nombre: 'Carlos Méndez',  email: 'carlos@gestionmetas.com',  password: 'carlos123', rol: 'USUARIO', estado: 'ACTIVO',   telefono: '+58 414 555 0202' } }),
-    prisma.usuario.upsert({ where: { email: 'laura@gestionmetas.com' },    update: {}, create: { nombre: 'Laura Gómez',    email: 'laura@gestionmetas.com',   password: 'laura123',  rol: 'ADMIN',   estado: 'INACTIVO', telefono: '+58 416 555 0303' } }),
+    prisma.usuario.upsert({ where: { email: 'admin@gestionmetas.com' },    update: {}, create: { nombre: 'Administrador',  email: 'admin@gestionmetas.com',   password: adminPassword,  rol: 'ADMIN',   estado: 'ACTIVO',   telefono: '' } }),
+    prisma.usuario.upsert({ where: { email: 'usuario@gestionmetas.com' },  update: {}, create: { nombre: 'Usuario Prueba', email: 'usuario@gestionmetas.com', password: userPassword,   rol: 'USUARIO', estado: 'ACTIVO',   telefono: '' } }),
+    prisma.usuario.upsert({ where: { email: 'ana@gestionmetas.com' },      update: {}, create: { nombre: 'Ana Rodríguez',  email: 'ana@gestionmetas.com',     password: anaPassword,    rol: 'USUARIO', estado: 'ACTIVO',   telefono: '+58 412 555 0101' } }),
+    prisma.usuario.upsert({ where: { email: 'carlos@gestionmetas.com' },   update: {}, create: { nombre: 'Carlos Méndez',  email: 'carlos@gestionmetas.com',  password: carlosPassword, rol: 'USUARIO', estado: 'ACTIVO',   telefono: '+58 414 555 0202' } }),
+    prisma.usuario.upsert({ where: { email: 'laura@gestionmetas.com' },    update: {}, create: { nombre: 'Laura Gómez',    email: 'laura@gestionmetas.com',   password: lauraPassword,  rol: 'ADMIN',   estado: 'INACTIVO', telefono: '+58 416 555 0303' } }),
   ]);
   console.log(`✅ ${usuarios.length} usuarios creados`);
 

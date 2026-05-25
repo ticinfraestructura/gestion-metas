@@ -55,7 +55,28 @@ interface ActividadUsuario {
   avances: AvanceUsuario[];
 }
 
-type Tab = 'metas' | 'contratistas' | 'avances' | 'alcances' | 'consolidado' | 'actividades-usuario' | 'avances-usuario';
+interface AvanceMetaReporte {
+  meta: { id: number; codigo: string; nombre: string; estado: string; fecha_limite: string; unidades?: number };
+  resumen: { totalAvances: number; avanceMaximo: number; aporteTotal: number; usuarios: number };
+  usuarios: {
+    usuario?: { id: number; nombre: string; email: string; rol: string } | null;
+    contratista?: { id: number; nombre: string; codigo: string } | null;
+    totalAvances: number;
+    avanceMaximo: number;
+    aporteTotal: number;
+    ultimoAvance?: AvanceUsuario | null;
+    avances: {
+      id: number;
+      numavance: number;
+      descripcion: string;
+      fecha_presentacion: string;
+      porcentaje_avance: number;
+      aporte_meta: number;
+    }[];
+  }[];
+}
+
+type Tab = 'metas' | 'contratistas' | 'avances' | 'alcances' | 'consolidado' | 'actividades-usuario' | 'avances-usuario' | 'avances-meta';
 
 const TABS: { key: Tab; label: string }[] = [
   { key: 'metas',        label: 'Metas' },
@@ -65,6 +86,7 @@ const TABS: { key: Tab; label: string }[] = [
   { key: 'consolidado',  label: '📊 Consolidado por Período' },
   { key: 'actividades-usuario', label: '👤 Actividades por Usuario' },
   { key: 'avances-usuario', label: '📈 Avances por Usuario' },
+  { key: 'avances-meta', label: '🎯 Avances por Meta' },
 ];
 
 const estadoLabel: Record<string, string> = {
@@ -116,6 +138,8 @@ const Reportes: React.FC = () => {
   const [filterFechaFin, setFilterFechaFin] = useState('');
   const [filterContratistaAct, setFilterContratistaAct] = useState('todos');
   const [filterUsuarioAct, setFilterUsuarioAct] = useState('todos');
+  const [avancesPorMeta, setAvancesPorMeta] = useState<AvanceMetaReporte[]>([]);
+  const [filterMetaReporte, setFilterMetaReporte] = useState('todos');
   const printRef = useRef<HTMLDivElement>(null);
   const [periodoTipo, setPeriodoTipo] = useState<PeriodoTipo>('mensual');
   const [periodoMes, setPeriodoMes]   = useState(() => new Date().toISOString().slice(0, 7));
@@ -200,9 +224,30 @@ const Reportes: React.FC = () => {
     }
   };
 
+  const fetchAvancesPorMeta = async () => {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (filterFechaInicio) params.append('fechaInicio', filterFechaInicio);
+      if (filterFechaFin) params.append('fechaFin', filterFechaFin);
+      if (filterMetaReporte !== 'todos') params.append('metaId', filterMetaReporte);
+
+      const response = await apiGet(`${API}/reportes/avances-por-meta?${params.toString()}`);
+      const data = await response.json();
+      if (data.success) setAvancesPorMeta(data.data.metas);
+    } catch (error) {
+      console.error('Error cargando avances por meta:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => { 
   if (tab === 'actividades-usuario' || tab === 'avances-usuario') {
     fetchActividadesUsuario();
+  } else if (tab === 'avances-meta') {
+    fetchAll();
+    fetchAvancesPorMeta();
   } else {
     fetchAll();
   }
@@ -217,8 +262,10 @@ const Reportes: React.FC = () => {
   useEffect(() => {
     if (tab === 'actividades-usuario' || tab === 'avances-usuario') {
       fetchActividadesUsuario();
+    } else if (tab === 'avances-meta') {
+      fetchAvancesPorMeta();
     }
-  }, [filterFechaInicio, filterFechaFin, filterContratistaAct, filterUsuarioAct]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [filterFechaInicio, filterFechaFin, filterContratistaAct, filterUsuarioAct, filterMetaReporte]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* ─── Filtrado ─── */
   const filteredMetas = metas.filter(m =>
@@ -294,7 +341,19 @@ const Reportes: React.FC = () => {
     return { meta, rows: Object.values(byC).sort((a,b) => b.maxPct - a.maxPct) };
   }).filter(Boolean)) as { meta: Meta; rows: { nombre: string; codigo: string; count: number; maxPct: number; aporte: number; ultFecha: string }[] }[];
 
-  const currentCount = tab === 'metas' ? filteredMetas.length : tab === 'contratistas' ? filteredContratistas.length : tab === 'avances' ? filteredAvances.length : tab === 'consolidado' ? consolidadoData.length : (tab === 'actividades-usuario' || tab === 'avances-usuario') ? filteredActividadesUsuario.reduce((sum, u) => sum + u.metasCreadas.length, 0) : filteredAlcances.length;
+  const filteredAvancesPorMeta = avancesPorMeta.filter(item =>
+    !search ||
+    (item.meta.codigo || '').toLowerCase().includes(search.toLowerCase()) ||
+    item.meta.nombre.toLowerCase().includes(search.toLowerCase()) ||
+    item.usuarios.some(u =>
+      (u.usuario?.nombre || '').toLowerCase().includes(search.toLowerCase()) ||
+      (u.usuario?.email || '').toLowerCase().includes(search.toLowerCase()) ||
+      (u.contratista?.nombre || '').toLowerCase().includes(search.toLowerCase()) ||
+      u.avances.some(a => a.descripcion.toLowerCase().includes(search.toLowerCase()))
+    )
+  );
+
+  const currentCount = tab === 'metas' ? filteredMetas.length : tab === 'contratistas' ? filteredContratistas.length : tab === 'avances' ? filteredAvances.length : tab === 'consolidado' ? consolidadoData.length : tab === 'avances-meta' ? filteredAvancesPorMeta.length : (tab === 'actividades-usuario' || tab === 'avances-usuario') ? filteredActividadesUsuario.reduce((sum, u) => sum + u.metasCreadas.length, 0) : filteredAlcances.length;
 
   const handlePrint = () => window.print();
 
@@ -778,6 +837,127 @@ const Reportes: React.FC = () => {
         </div>
   );
 
+  const SectionAvancesMeta = () => (
+    filteredAvancesPorMeta.length === 0
+      ? <div className="flex flex-col items-center gap-2 text-gray-400 py-16">
+          <FileText className="h-10 w-10 opacity-40" />
+          <p className="text-sm font-medium">Sin avances por meta encontrados</p>
+          <p className="text-xs">No hay avances registrados para el período seleccionado</p>
+        </div>
+      : <div className="space-y-6">
+          <div className="bg-gradient-to-r from-purple-50 to-violet-50 border border-purple-200 rounded-lg p-4">
+            <h3 className="text-sm font-semibold text-purple-900 mb-3">Resumen de Avances por Meta</h3>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
+              <div>
+                <p className="text-purple-600 font-medium">Metas con avance</p>
+                <p className="text-2xl font-bold text-purple-900">{filteredAvancesPorMeta.length}</p>
+              </div>
+              <div>
+                <p className="text-purple-600 font-medium">Avances registrados</p>
+                <p className="text-2xl font-bold text-purple-900">
+                  {filteredAvancesPorMeta.reduce((sum, m) => sum + m.resumen.totalAvances, 0)}
+                </p>
+              </div>
+              <div>
+                <p className="text-purple-600 font-medium">Aportantes</p>
+                <p className="text-2xl font-bold text-purple-900">
+                  {filteredAvancesPorMeta.reduce((sum, m) => sum + m.resumen.usuarios, 0)}
+                </p>
+              </div>
+              <div>
+                <p className="text-purple-600 font-medium">Aporte total</p>
+                <p className="text-2xl font-bold text-purple-900">
+                  {Math.round(filteredAvancesPorMeta.reduce((sum, m) => sum + m.resumen.aporteTotal, 0) * 100) / 100}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {filteredAvancesPorMeta.map((item) => (
+            <div key={item.meta.id} className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+              <div className="bg-gray-50 border-b border-gray-200 p-4">
+                <div className="flex flex-wrap items-start justify-between gap-4">
+                  <div>
+                    <h4 className="font-semibold text-gray-900">
+                      {item.meta.codigo ? `[${item.meta.codigo}] ` : ''}{item.meta.nombre}
+                    </h4>
+                    <p className="text-xs text-gray-500">
+                      Estado: {estadoLabel[item.meta.estado] || item.meta.estado} • Fecha límite: {item.meta.fecha_limite || '—'}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-4 text-xs">
+                    <div className="text-center">
+                      <p className="font-semibold text-gray-700">{item.resumen.totalAvances}</p>
+                      <p className="text-gray-500">Avances</p>
+                    </div>
+                    <div className="text-center">
+                      <p className="font-semibold text-gray-700">{item.resumen.usuarios}</p>
+                      <p className="text-gray-500">Aportantes</p>
+                    </div>
+                    <div className="text-center">
+                      <p className="font-semibold text-gray-700">{item.resumen.avanceMaximo}%</p>
+                      <p className="text-gray-500">Máximo</p>
+                    </div>
+                    <div className="text-center">
+                      <p className="font-semibold text-gray-700">{item.resumen.aporteTotal}</p>
+                      <p className="text-gray-500">Aporte</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="divide-y divide-gray-100">
+                {item.usuarios.map((usuarioData, idx) => (
+                  <div key={`${item.meta.id}-${usuarioData.usuario?.id || usuarioData.contratista?.id || idx}`} className="p-4">
+                    <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+                      <div>
+                        <h5 className="text-sm font-semibold text-gray-800">
+                          {usuarioData.contratista?.nombre || usuarioData.usuario?.nombre || 'Aportante no identificado'}
+                        </h5>
+                        <p className="text-xs text-gray-500">
+                          {usuarioData.contratista
+                            ? `Contratista: ${usuarioData.contratista.codigo ? `[${usuarioData.contratista.codigo}] ` : ''}${usuarioData.contratista.nombre}`
+                            : usuarioData.usuario?.email || ''}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-3 text-xs">
+                        <span className="font-semibold text-gray-700">{usuarioData.totalAvances} avance{usuarioData.totalAvances !== 1 ? 's' : ''}</span>
+                        <span className={`font-bold ${pctTextColor(usuarioData.avanceMaximo)}`}>{usuarioData.avanceMaximo}% máx.</span>
+                        <span className="text-gray-500">Aporte: {usuarioData.aporteTotal}</span>
+                      </div>
+                    </div>
+                    <table className="min-w-full divide-y divide-gray-200 text-xs">
+                      <thead className="bg-white">
+                        <tr>
+                          <th className="px-3 py-2 text-left font-medium text-gray-500 uppercase">#</th>
+                          <th className="px-3 py-2 text-left font-medium text-gray-500 uppercase">Fecha</th>
+                          <th className="px-3 py-2 text-left font-medium text-gray-500 uppercase">Descripción</th>
+                          <th className="px-3 py-2 text-right font-medium text-gray-500 uppercase">% Avance</th>
+                          <th className="px-3 py-2 text-right font-medium text-gray-500 uppercase">Aporte</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {usuarioData.avances.map(avance => (
+                          <tr key={avance.id} className="hover:bg-gray-50">
+                            <td className="px-3 py-2 font-mono text-gray-500">#{avance.numavance}</td>
+                            <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{avance.fecha_presentacion}</td>
+                            <td className="px-3 py-2 text-gray-700">{avance.descripcion}</td>
+                            <td className="px-3 py-2 text-right">
+                              <span className={`font-bold ${pctTextColor(avance.porcentaje_avance)}`}>{avance.porcentaje_avance}%</span>
+                            </td>
+                            <td className="px-3 py-2 text-right text-gray-600">{avance.aporte_meta}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+  );
+
   return (
     <>
       {/* Print styles */}
@@ -896,6 +1076,19 @@ const Reportes: React.FC = () => {
               </>
             )}
 
+            {tab === 'avances-meta' && (
+              <>
+                <input type="date" value={filterFechaInicio} onChange={e => setFilterFechaInicio(e.target.value)}
+                  placeholder="Fecha inicio" className="input py-1.5 text-sm w-40" />
+                <input type="date" value={filterFechaFin} onChange={e => setFilterFechaFin(e.target.value)}
+                  placeholder="Fecha fin" className="input py-1.5 text-sm w-40" />
+                <select value={filterMetaReporte} onChange={e => setFilterMetaReporte(e.target.value)} className="input py-1.5 text-sm w-64">
+                  <option value="todos">Todas las metas</option>
+                  {metas.map(m => <option key={m.id} value={m.id}>{m.codigo ? `[${m.codigo}] ` : ''}{m.nombre}</option>)}
+                </select>
+              </>
+            )}
+
             {tab === 'consolidado' && (
               <div className="flex items-center gap-2 flex-wrap">
                 <div className="flex rounded-lg border border-gray-200 overflow-hidden text-xs font-medium">
@@ -931,12 +1124,15 @@ const Reportes: React.FC = () => {
                 ? `Reporte Mensual de Avances — ${mesLabel(filterMes)}`
                 : tab === 'consolidado'
                 ? `Reporte Consolidado — ${consolidadoPeriodo.label}`
+                : tab === 'avances-meta'
+                ? 'Reporte de Avances por Meta'
                 : `Reporte: ${TABS.find(t => t.key === tab)?.label}`}
             </h2>
             <p className="text-xs text-gray-500 mt-1">
               Generado el {new Date().toLocaleDateString('es-ES', { weekday:'long', year:'numeric', month:'long', day:'numeric' })}
               {tab === 'avances' && filterMes && ` · Período: ${mesLabel(filterMes)}`}
               {tab === 'consolidado' && ` · Período: ${consolidadoPeriodo.label}`}
+              {tab === 'avances-meta' && (filterFechaInicio || filterFechaFin) && ` · Período: ${filterFechaInicio || 'inicio'} a ${filterFechaFin || 'fin'}`}
               {' '}— Total: {currentCount} registro{currentCount !== 1 ? 's' : ''}
             </p>
           </div>
@@ -956,6 +1152,7 @@ const Reportes: React.FC = () => {
                 {tab === 'consolidado'  && <SectionConsolidado />}
                 {tab === 'actividades-usuario' && <SectionActividadesUsuario />}
                 {tab === 'avances-usuario' && <SectionAvancesUsuario />}
+                {tab === 'avances-meta' && <SectionAvancesMeta />}
               </div>
             )}
           </div>

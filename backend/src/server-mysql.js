@@ -4,6 +4,7 @@ const multer   = require('multer');
 const path     = require('path');
 const fs       = require('fs');
 const jwt      = require('jsonwebtoken');
+const bcrypt   = require('bcryptjs');
 const { PrismaClient } = require('@prisma/client');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'gestion-metas-secret-2026';
@@ -52,7 +53,10 @@ app.post('/api/auth/login', async (req, res) => {
       where: { email: email?.toLowerCase() },
       include: { contratista: { select: { id: true, nombre: true, codigo: true } } },
     });
-    if (!user || user.password !== password)
+    if (!user)
+      return res.status(401).json({ success: false, message: 'Credenciales inválidas' });
+    const passwordMatch = await bcrypt.compare(password, user.password);
+    if (!passwordMatch)
       return res.status(401).json({ success: false, message: 'Credenciales inválidas' });
     if (user.estado === 'INACTIVO')
       return res.status(403).json({ success: false, message: 'Usuario inactivo. Contacte al administrador.' });
@@ -770,6 +774,115 @@ app.get('/api/reportes/actividades-usuario', authenticate, async (req, res) => {
     });
   } catch (e) { 
     res.status(500).json({ success: false, message: e.message }); 
+  }
+});
+
+app.get('/api/reportes/avances-por-meta', authenticate, async (req, res) => {
+  try {
+    const { fechaInicio, fechaFin, metaId } = req.query;
+
+    const where = {};
+    if (fechaInicio || fechaFin) {
+      where.fecha_presentacion = {};
+      if (fechaInicio) where.fecha_presentacion.gte = fechaInicio;
+      if (fechaFin) where.fecha_presentacion.lte = fechaFin;
+    }
+    if (metaId && metaId !== 'todos') where.metaId = parseInt(metaId);
+    if (req.user.rol === 'CONTRATISTA' && req.user.contratistaId) where.contratistaId = req.user.contratistaId;
+
+    const avances = await prisma.avance.findMany({
+      where,
+      include: {
+        meta: {
+          select: { id: true, codigo: true, nombre: true, estado: true, fecha_limite: true, unidades: true }
+        },
+        contratista: {
+          select: { id: true, nombre: true, codigo: true }
+        },
+        reportadoPor: {
+          select: { id: true, nombre: true, email: true, rol: true }
+        }
+      },
+      orderBy: [
+        { metaId: 'asc' },
+        { fecha_presentacion: 'desc' }
+      ]
+    });
+
+    const metasMap = new Map();
+    avances.forEach(avance => {
+      const key = avance.metaId;
+      if (!metasMap.has(key)) {
+        metasMap.set(key, {
+          meta: avance.meta,
+          resumen: {
+            totalAvances: 0,
+            avanceMaximo: 0,
+            aporteTotal: 0,
+            usuarios: 0
+          },
+          usuarios: new Map()
+        });
+      }
+
+      const metaData = metasMap.get(key);
+      const usuarioKey = avance.contratistaId ? `contratista-${avance.contratistaId}` : avance.reportado_por_id;
+      if (!metaData.usuarios.has(usuarioKey)) {
+        metaData.usuarios.set(usuarioKey, {
+          usuario: avance.contratista ? null : avance.reportadoPor || null,
+          contratista: avance.contratista || null,
+          totalAvances: 0,
+          avanceMaximo: 0,
+          aporteTotal: 0,
+          ultimoAvance: null,
+          avances: []
+        });
+      }
+
+      const usuarioData = metaData.usuarios.get(usuarioKey);
+      const item = {
+        id: avance.id,
+        numavance: avance.numavance,
+        descripcion: avance.descripcion,
+        fecha_presentacion: avance.fecha_presentacion,
+        porcentaje_avance: avance.porcentaje_avance || 0,
+        aporte_meta: avance.aporte_meta || 0
+      };
+
+      usuarioData.avances.push(item);
+      usuarioData.totalAvances++;
+      usuarioData.avanceMaximo = Math.max(usuarioData.avanceMaximo, item.porcentaje_avance);
+      usuarioData.aporteTotal = Math.round((usuarioData.aporteTotal + item.aporte_meta) * 100) / 100;
+      if (!usuarioData.ultimoAvance || item.fecha_presentacion > usuarioData.ultimoAvance.fecha_presentacion) usuarioData.ultimoAvance = item;
+
+      metaData.resumen.totalAvances++;
+      metaData.resumen.avanceMaximo = Math.max(metaData.resumen.avanceMaximo, item.porcentaje_avance);
+      metaData.resumen.aporteTotal = Math.round((metaData.resumen.aporteTotal + item.aporte_meta) * 100) / 100;
+    });
+
+    const metas = Array.from(metasMap.values()).map(item => ({
+      meta: item.meta,
+      resumen: {
+        ...item.resumen,
+        usuarios: item.usuarios.size
+      },
+      usuarios: Array.from(item.usuarios.values()).sort((a, b) => b.avanceMaximo - a.avanceMaximo)
+    }));
+
+    res.json({
+      success: true,
+      data: {
+        metas,
+        parametros: { fechaInicio, fechaFin, metaId },
+        resumen: {
+          totalMetas: metas.length,
+          totalAvances: avances.length,
+          totalUsuarios: metas.reduce((sum, meta) => sum + meta.resumen.usuarios, 0)
+        }
+      }
+    });
+  } catch (e) {
+    res.status(500).json({ success: false, message: e.message });
   }
 });
 
