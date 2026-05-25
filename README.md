@@ -5,11 +5,12 @@ Aplicación web para la gestión integral de metas, contratistas, alcances y ava
 ## 🚀 Características
 
 - ✅ **Persistencia Real**: MySQL 8.4 con Prisma ORM — los datos no se pierden al reiniciar
-- ✅ **Autenticación JWT**: Login seguro con roles ADMIN y USUARIO
+- ✅ **Autenticación JWT**: Login seguro con roles ADMIN y USUARIO, contraseñas hasheadas con bcrypt
 - ✅ **Gestión Completa**: CRUD para metas, contratistas, alcances, avances y usuarios
 - ✅ **Dashboard Analytics**: KPIs consolidados, gráfico de barras y avances recientes
-- ✅ **Reportes**: Tablas filtrables de metas, contratistas, avances, alcances, consolidado por período, actividades por usuario y avances por usuario
+- ✅ **Reportes**: Tablas filtrables de metas, contratistas, avances, alcances, consolidado por período, actividades por usuario, avances por usuario y avances por meta
 - ✅ **Filtros avanzados**: Búsqueda en tiempo real por código, nombre y descripción de metas; filtros por fechas, contratista y usuario
+- ✅ **UX Mejorada**: Barra de scroll sticky en listados grandes, columna de acciones fija a la derecha
 - ✅ **Archivos adjuntos**: Subida de imágenes y documentos en avances (hasta 10 MB)
 - ✅ **Acceso en red local**: URL dinámica — funciona desde `localhost` y desde otros dispositivos en la misma red
 
@@ -18,16 +19,17 @@ Aplicación web para la gestión integral de metas, contratistas, alcances y ava
 ```
 ┌─────────────────────┐         HTTP/REST          ┌──────────────────────────┐
 │   Frontend          │ ──────────────────────────▶ │   Backend                │
-│   React 18 + TS     │       localhost:3001        │   Node.js + Express      │
+│   React 18 + TS     │       localhost:3002        │   Node.js + Express      │
 │   Tailwind CSS      │ ◀────────────────────────── │   server-mysql.js        │
 │   Zustand (estado)  │         JSON API            │   Prisma ORM + MySQL 8.4 │
-│   Puerto: 3000      │                             │   Puerto: 3001           │
+│   Puerto: 3000      │                             │   Puerto: 3002           │
+│   (nginx proxy)     │                             │   (Docker)                │
 └─────────────────────┘                             └──────────────────────────┘
                                                                │
                                                     ┌──────────────────────────┐
                                                     │   MySQL 8.4              │
                                                     │   Base de datos          │
-                                                    │   Puerto: 3306           │
+                                                    │   Puerto: 3307           │
                                                     │   DB: gestion_metas      │
                                                     └──────────────────────────┘
 ```
@@ -111,8 +113,8 @@ npm start
 | Recurso | URL local | URL red local |
 |---------|-----------|---------------|
 | **Frontend** | http://localhost:3000 | http://\<IP-del-servidor\>:3000 |
-| **Backend API** | http://localhost:3001/api | http://\<IP-del-servidor\>:3001/api |
-| **Health check** | http://localhost:3001/health | — |
+| **Backend API** | http://localhost:3002/api | http://\<IP-del-servidor\>:3002/api |
+| **MySQL** | localhost:3307 | — |
 
 > La IP del servidor en esta máquina es `192.168.1.34`.
 
@@ -192,6 +194,7 @@ El módulo de reportes incluye las siguientes vistas:
 | **Consolidado por Período** | Avances consolidados por períodos mensual, trimestral o semestral | Período, búsqueda por código, nombre o descripción de meta |
 | **Actividades por Usuario** | Actividades relacionadas a un usuario contratista, incluyendo actividades con avance 0% | Fecha inicio, fecha fin, contratista, usuario, búsqueda por código/nombre |
 | **Avances por Usuario** | Reporte de avances por usuario mostrando todas las actividades; si no hay avance, muestra 0% | Fecha inicio, fecha fin, contratista, usuario, búsqueda por código/nombre |
+| **Avances por Meta** | Reporte de avances agrupados por meta, mostrando los aportantes (contratistas) por cada meta en un período específico | Fecha inicio, fecha fin, meta, búsqueda por código/nombre/contratista |
 
 En el módulo **Metas**, la casilla de búsqueda filtra en tiempo real por:
 
@@ -202,6 +205,13 @@ En el módulo **Metas**, la casilla de búsqueda filtra en tiempo real por:
 Los reportes por usuario consideran actividades vinculadas por `alcances` y por `avances`, usando el `contratistaId` asociado al usuario contratista.
 
 En el reporte **Avances**, el mes seleccionado se conserva al cambiar de pestaña y el filtrado mensual compara las fechas por formato `YYYY-MM`, permitiendo consultar períodos anteriores como febrero de 2026 sin que el reporte vuelva automáticamente al mes actual.
+
+En el reporte **Avances por Meta**, los avances se agrupan por contratista/aportante real en lugar del usuario que registró el avance, mostrando así quién realmente aportó a cada meta.
+
+El módulo **Metas** incluye mejoras de UX:
+- Barra de scroll horizontal sticky en la parte superior para facilitar navegación en listados grandes
+- Columna de acciones (Editar/Eliminar) fija a la derecha para siempre estar visible
+- Búsqueda en tiempo real por código, nombre y descripción de metas
 
 ## 🔄 Actualización
 
@@ -222,4 +232,11 @@ npx prisma migrate deploy
 
 ---
 
-*Sistema de Gestión de Metas v1.1.0 — Node.js + React + MySQL 8.4 + Prisma ORM*
+*Sistema de Gestión de Metas v1.2.0 — Node.js + React + MySQL 8.4 + Prisma ORM*
+
+**Cambios recientes (v1.2.0):**
+- Agregado reporte de avances por meta con filtros de período
+- Mejorada UX de listados con barra de scroll sticky y columna de acciones fija
+- Corregida configuración de puertos (backend: 3002, MySQL: 3307)
+- Implementado bcrypt para hasheo de contraseñas
+- Corregida configuración de nginx para proxy al backend
