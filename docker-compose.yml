@@ -7,11 +7,17 @@ services:
     image: mysql:8.0
     container_name: gestion-metas-mysql
     restart: unless-stopped
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --init-connect=SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci
+      - --skip-character-set-client-handshake
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-rootpassword}
       MYSQL_DATABASE: ${MYSQL_DATABASE:-gestion_metas}
       MYSQL_USER: ${MYSQL_USER:-gestion_user}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD:-gestion_password}
+      LANG: C.UTF-8
     ports:
       - "3307:3306"
     volumes:
@@ -34,8 +40,9 @@ services:
     restart: unless-stopped
     environment:
       PORT: 3002
-      DATABASE_URL: mysql://${MYSQL_USER:-gestion_user}:${MYSQL_PASSWORD:-gestion_password}@mysql:3306/${MYSQL_DATABASE:-gestion_metas}
+      DATABASE_URL: mysql://${MYSQL_USER:-gestion_user}:${MYSQL_PASSWORD:-gestion_password}@mysql:3306/${MYSQL_DATABASE:-gestion_metas}?charset=utf8mb4
       BACKEND_URL: http://localhost:3002
+      LANG: C.UTF-8
     ports:
       - "3002:3002"
     depends_on:
